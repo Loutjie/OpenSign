@@ -35,9 +35,9 @@ export default async function forwardDoc(request) {
       try {
         let mailRes;
         for (let i = 0; i < recipients.length; i++) {
-          const logo = `<img src='https://qikinnovation.ams3.digitaloceanspaces.com/logo.png' height='50' style='padding:20px'/>`;
+          const logo = `<img src='https://leaselynx.co.za/logo-LeaseLynx.png' height='50' style='padding:20px'/>`;
 
-          const themeColor = '#47a3ad';
+          const themeColor = '#2563EB';
 
           let params = {
             extUserId: extUserId,

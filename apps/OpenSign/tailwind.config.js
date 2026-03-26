@@ -80,26 +80,26 @@ module.exports = {
     themes: [
       {
         opensigndark: {
-          primary: "#007ACC", // VS Code blue - CTA & highlight color
+          primary: "#2563EB", // LeaseLynx blue-600
           "primary-content": "#FFFFFF",
 
-          secondary: "#1F2937", // Sidebar background (darker slate)
-          "secondary-content": "#E5E7EB",
+          secondary: "#0F172A", // LeaseLynx slate-900
+          "secondary-content": "#E2E8F0",
 
-          accent: "#4A9EFF", // Lighter VS Code blue for hover, minor CTA
+          accent: "#3B82F6", // LeaseLynx blue-500
           "accent-content": "#FFFFFF",
 
-          neutral: "#3C3C3C", // VS Code inactive/disabled element background
-          "neutral-content": "#CCCCCC", // VS Code inactive text color
+          neutral: "#334155", // slate-700
+          "neutral-content": "#CBD5E1", // slate-300
 
-          "base-100": "#121212", // App background
-          "base-200": "#181818", // Slight elevation (cards)
-          "base-300": "#1E1E1E", // Further elevated items (panels)
-          "base-content": "#F3F4F6", // Main text color (soft white)
+          "base-100": "#020617", // LeaseLynx slate-950 (app bg)
+          "base-200": "#0F172A", // slate-900
+          "base-300": "#1E293B", // slate-800
+          "base-content": "#F1F5F9", // slate-100
 
-          info: "#2563EB", // For info panels like "Out for signature"
-          success: "#22C55E", // Optional: for completed docs or alerts
-          warning: "#FBBF24",
+          info: "#2563EB",
+          success: "#10B981", // emerald-500
+          warning: "#F59E0B",
           error: "#EF4444",
 
           "--rounded-btn": "1.9rem",
@@ -122,26 +122,26 @@ module.exports = {
       },
       {
         opensigncss: {
-          primary: "#002864",
-          "primary-content": "#cacccf",
-          secondary: "#29354a",
-          "secondary-content": "#c8d1e0",
-          accent: "#E10032",
-          "accent-content": "#ffd8d5",
-          neutral: "#c1ccdb",
-          "neutral-content": "#111312",
-          "base-100": "#ffffff",
-          "base-200": "#dedede",
-          "base-300": "#bebebe",
-          "base-content": "#161616",
-          info: "#00b6ff",
-          "info-content": "#f5f5f4",
-          success: "#00a96e",
-          "success-content": "#f5f5f4",
-          warning: "#ffbe00",
-          "warning-content": "#ccd9e8",
-          error: "#ffa1a7",
-          "error-content": "#16090a",
+          primary: "#2563EB", // LeaseLynx blue-600
+          "primary-content": "#FFFFFF",
+          secondary: "#1E293B", // slate-800
+          "secondary-content": "#E2E8F0",
+          accent: "#10B981", // emerald-500
+          "accent-content": "#FFFFFF",
+          neutral: "#CBD5E1", // slate-300
+          "neutral-content": "#0F172A",
+          "base-100": "#F8FAFC", // slate-50
+          "base-200": "#E2E8F0", // slate-200
+          "base-300": "#CBD5E1", // slate-300
+          "base-content": "#0F172A", // slate-900
+          info: "#2563EB",
+          "info-content": "#FFFFFF",
+          success: "#10B981",
+          "success-content": "#FFFFFF",
+          warning: "#F59E0B",
+          "warning-content": "#0F172A",
+          error: "#EF4444",
+          "error-content": "#FFFFFF",
           "--rounded-btn": "1.9rem",
           "--tab-border": "2px",
           "--tab-radius": "0.7rem"
