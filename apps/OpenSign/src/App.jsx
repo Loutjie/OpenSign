@@ -33,8 +33,8 @@ const UpdateExistUserAdmin = lazyWithRetry(
   () => import("./pages/UpdateExistUserAdmin")
 );
 const Preferences = lazyWithRetry(() => import("./pages/Preferences"));
-const Login = lazyWithRetry(() => import("./pages/Login"));
 const VerifyDocument = lazyWithRetry(() => import("./pages/VerifyDocument"));
+const ExternalRedirect = ({ to }) => { window.location.replace(to); return null; };
 const EmailBuilder = lazyWithRetry(() => import("./pages/EmailBuilder"));
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/legacy/build/pdf.worker.min.mjs`;
@@ -66,7 +66,7 @@ function App() {
           <Title />
           <Routes>
             <Route element={<ValidateRoute />}>
-              <Route exact path="/" element={<Lazy Page={Login} />} />
+              <Route exact path="/" element={<ExternalRedirect to="https://leaselynx.co.za" />} />
                   <Route path="/addadmin" element={<Lazy Page={AddAdmin} />} />
                   <Route
                     path="/upgrade-2.1"
