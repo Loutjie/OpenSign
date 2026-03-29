@@ -34,6 +34,7 @@ const UpdateExistUserAdmin = lazyWithRetry(
 );
 const Preferences = lazyWithRetry(() => import("./pages/Preferences"));
 const VerifyDocument = lazyWithRetry(() => import("./pages/VerifyDocument"));
+const AutoLogin = lazyWithRetry(() => import("./pages/AutoLogin"));
 const ExternalRedirect = ({ to }) => { window.location.replace(to); return null; };
 const EmailBuilder = lazyWithRetry(() => import("./pages/EmailBuilder"));
 
@@ -84,6 +85,7 @@ function App() {
               path="/login/:base64url"
               element={<Lazy Page={GuestLogin} />}
             />
+            <Route path="/autologin" element={<Lazy Page={AutoLogin} />} />
             <Route path="/debugpdf" element={<Lazy Page={DebugPdf} />} />
               <Route
                 path="/forgetpassword"
