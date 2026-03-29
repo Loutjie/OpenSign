@@ -16,7 +16,7 @@ import { emailRegex } from "../constant/const";
 
 const AddAdmin = () => {
   const appName =
-    "OpenSign™";
+    "LeaseLynx";
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const dispatch = useDispatch();

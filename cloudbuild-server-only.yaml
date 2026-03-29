@@ -1,0 +1,14 @@
+steps:
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/leaselynx-ai/opensign-repo/opensignserver:leaselynx'
+      - '-f'
+      - 'apps/OpenSignServer/Dockerhubfile'
+      - '.'
+images:
+  - 'us-central1-docker.pkg.dev/leaselynx-ai/opensign-repo/opensignserver:leaselynx'
+timeout: '1200s'
+options:
+  machineType: 'E2_HIGHCPU_8'

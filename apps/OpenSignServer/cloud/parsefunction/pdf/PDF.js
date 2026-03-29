@@ -480,6 +480,26 @@ async function PDF(req) {
         );
         sendNotifyMail(_resDoc, signUser, mailProvider, publicUrl);
         saveFileUsage(pdfSize, data.imageUrl, _resDoc?.CreatedBy?.objectId);
+
+        // Call external webhook if configured (LeaseLynx integration)
+        if (_resDoc.WebhookUrl) {
+          const webhookEvent = updatedDoc?.isCompleted ? 'document_completed' : 'document_signed';
+          try {
+            await axios.post(_resDoc.WebhookUrl, {
+              event: webhookEvent,
+              document_id: docId,
+              signed_document_url: data.imageUrl,
+              signer: { name: signUser?.Name, email: signUser?.Email, role: signUser?.Role || '' },
+              is_completed: !!updatedDoc?.isCompleted,
+              total_signers: _resDoc.Signers?.length || 0,
+              signers_completed: updateAuditTrail?.filter(x => x.Activity === 'Signed')?.length || 0,
+            });
+            console.log(`Webhook sent: ${webhookEvent} → ${_resDoc.WebhookUrl}`);
+          } catch (whErr) {
+            console.log(`Webhook failed: ${whErr.message}`);
+          }
+        }
+
         if (updatedDoc && updatedDoc.isCompleted) {
           const hashForDoc = documentHash || updatedDoc?.DocumentHash;
           const doc = { ..._resDoc, AuditTrail: updatedDoc.AuditTrail, SignedUrl: data.imageUrl };

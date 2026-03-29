@@ -1,4 +1,3 @@
-import logo from "../assets/images/logo.png";
 import { getEnv } from "./Utils";
 
 export function serverUrl_fn() {
@@ -10,7 +9,7 @@ export function serverUrl_fn() {
   return baseUrl;
 }
 export const appInfo = {
-  applogo: logo,
+  applogo: "https://leaselynx.co.za/logo-LeaseLynx.png",
   appId: process.env.REACT_APP_APPID ? process.env.REACT_APP_APPID : "opensign",
   baseUrl: serverUrl_fn(),
   defaultRole: "contracts_User",

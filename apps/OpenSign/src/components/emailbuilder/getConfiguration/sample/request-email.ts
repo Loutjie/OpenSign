@@ -3,7 +3,7 @@ import { TEditorConfiguration } from "../../documents/editor/core";
 const getRequestEmail = (
 ): TEditorConfiguration => {
   const appName =
-    "OpenSign™";
+    "LeaseLynx";
 
   const logoBlock =
         {

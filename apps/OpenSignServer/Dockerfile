@@ -1,0 +1,32 @@
+# Use an official Node runtime as the base image
+FROM node:22.14.0
+
+# Install LibreOffice for DOCX to PDF conversions
+RUN apt-get update \
+  && apt-get install -y libreoffice \
+  && rm -rf /var/lib/apt/lists/*
+
+# Set the working directory inside the container
+WORKDIR /usr/src/app
+
+# Copy package.json and package-lock.json first to leverage Docker cache
+COPY apps/OpenSignServer/package*.json ./
+
+# Install application dependencies
+RUN npm install
+
+# If you have native dependencies, you'll need extra tools. Uncomment the following line if needed.
+# RUN apk add --no-cache make gcc g++ python3
+
+# Copy the current directory contents into the container
+COPY apps/OpenSignServer/ .
+
+# Make port 8080 available to the world outside this container
+EXPOSE 8080
+
+# Define environment variables if needed
+# ENV NODE_ENV production
+# ENV DATABASE_URL mongodb://db:27017
+
+# Run the application
+CMD ["npm", "start"]

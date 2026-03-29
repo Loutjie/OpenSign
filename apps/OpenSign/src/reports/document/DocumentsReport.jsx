@@ -43,7 +43,7 @@ const DocumentsReport = (props) => {
   const titleRef = useRef(null);
   const titleElement = useElSize(titleRef);
   const appName =
-    "OpenSign™";
+    "LeaseLynx";
   const { t } = useTranslation();
   const navigate = useNavigate();
   const location = useLocation();

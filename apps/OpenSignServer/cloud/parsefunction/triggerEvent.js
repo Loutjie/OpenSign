@@ -12,7 +12,7 @@ export default async function triggerEvent(request) {
 
   try {
     const docQuery = new Parse.Query('contracts_Document');
-    docQuery.select(['Name', 'IsEnableOTP', 'SignedUrl', 'AuditTrail']);
+    docQuery.select(['Name', 'IsEnableOTP', 'SignedUrl', 'AuditTrail', 'WebhookUrl', 'Signers']);
     const docRes = await docQuery.get(docId, { useMasterKey: true });
     const _docRes = docRes && docRes?.toJSON();
     const isEnableOTP = docRes?.get('IsEnableOTP') || false;
@@ -74,6 +74,27 @@ export default async function triggerEvent(request) {
       updateDoc.id = docRes.id;
       updateDoc.set('AuditTrail', updatedAuditTrail);
       await updateDoc.save(null, { useMasterKey: true });
+
+      // Call external webhook if configured (LeaseLynx integration)
+      const webhookUrl = docRes.get('WebhookUrl');
+      if (webhookUrl) {
+        try {
+          // Fetch contact details for the viewer
+          const contactQuery = new Parse.Query('contracts_Contactbook');
+          const contact = await contactQuery.get(contactId, { useMasterKey: true });
+          const contactData = contact?.toJSON();
+          await axios.post(webhookUrl, {
+            event: 'document_viewed',
+            document_id: docId,
+            signer: { name: contactData?.Name || '', email: contactData?.Email || '', role: contactData?.Role || '' },
+            is_completed: false,
+            total_signers: _docRes.Signers?.length || 0,
+          });
+          console.log(`Webhook sent: document_viewed → ${webhookUrl}`);
+        } catch (whErr) {
+          console.log(`Webhook failed: ${whErr.message}`);
+        }
+      }
     }
 
     return { message: 'event called!' };
