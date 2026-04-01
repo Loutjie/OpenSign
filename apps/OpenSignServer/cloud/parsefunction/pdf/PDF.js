@@ -394,9 +394,11 @@ async function PDF(req) {
 
     const username = signUser.Name;
     const userEmail = signUser.Email;
+    console.log(`[signPdf] docId=${docId}, userId=${reqUserId}, signUser=${signUser?.Name}, className=${className}`);
     if (req.params.pdfFile) {
       //  `PdfBuffer` used to create buffer from pdf file
       let PdfBuffer = Buffer.from(req.params.pdfFile, 'base64');
+      console.log(`[signPdf] PdfBuffer size: ${PdfBuffer.length}`);
       //  `P12Buffer` used to create buffer from p12 certificate
       let pfxFile = process.env.PFX_BASE64;
       let passphrase = process.env.PASS_PHRASE;
@@ -437,7 +439,9 @@ async function PDF(req) {
       let signedFilePath = `./exports/signed_${name}`;
       let pdfSize = PdfBuffer.length;
       let documentHash;
+      console.log(`[signPdf] isCompleted=${isCompleted}, auditTrail signed count=${auditTrail.length}, signers=${_resDoc.Signers?.length}, placeholders=${_resDoc.Placeholders?.length}`);
       if (isCompleted) {
+        console.log('[signPdf] Document is complete — processing final PDF...');
         const signersName = _resDoc.Signers?.map(x => x.Name + ' <' + x.Email + '>');
         const reason =
           signersName && signersName.length > 0
@@ -464,7 +468,9 @@ async function PDF(req) {
       }
 
       // `uploadFile` is used to upload pdf to aws s3 and get it's url
+      console.log(`[signPdf] Uploading signed PDF: signed_${name}`);
       const data = await uploadFile(`signed_${name}`, signedFilePath);
+      console.log(`[signPdf] Upload result:`, data?.imageUrl ? 'success' : 'FAILED', data?.imageUrl?.substring(0, 80));
 
       if (data && data.imageUrl) {
         // `axios` is used to update signed pdf url in contracts_Document classes for given DocId
@@ -527,7 +533,8 @@ async function PDF(req) {
       throw error;
     }
   } catch (err) {
-    console.log('Err in signpdf', err);
+    console.log('Err in signpdf', err?.message || err);
+    console.log('Err stack:', err?.stack);
     const body = { DebugginLog: err?.message };
     try {
       await axios.put(`${docUrl}/${docId}`, body, { headers });
