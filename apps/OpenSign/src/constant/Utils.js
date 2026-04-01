@@ -842,7 +842,7 @@ export const signPdfFun = async (
 
     let base64Sign = getSignature?.SignUrl;
     //check https type signature (default signature exist) then convert in base64
-    const isUrl = base64Sign.includes("https");
+    const isUrl = base64Sign?.includes("https");
     if (isUrl) {
       try {
         base64Sign = await fetchImageBase64(base64Sign);
