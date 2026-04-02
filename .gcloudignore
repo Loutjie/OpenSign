@@ -1,0 +1,8 @@
+.gcloudignore
+.git
+.gitignore
+node_modules
+apps/OpenSign/node_modules
+apps/OpenSignServer/node_modules
+apps/OpenSign/build
+cert

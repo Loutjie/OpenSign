@@ -34,9 +34,26 @@ async function sendMailOTPv1(request) {
           subject: `Your ${AppName} OTP`,
           text: 'otp email',
           html:
-            `<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white;'><div style='background-color:red;padding:2px;font-family:system-ui;background-color:#2563EB;'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px;'>OTP Verification</p></div><div style='padding:20px;'><p style='font-family:system-ui;font-size:14px;'>Your OTP for ${AppName} verification is:</p><p style='text-decoration:none;font-weight:bolder;color:blue;font-size:45px;margin:20px;'>` +
+            `<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/></head>` +
+            `<body style="margin:0;background:#020617;font-family:system-ui,-apple-system,sans-serif;">` +
+            `<div style="background:#020617;padding:40px 16px;">` +
+            `<div style="max-width:580px;margin:0 auto;">` +
+            `<div style="background:#0f172a;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">` +
+            `<div style="padding:36px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">` +
+            `<img src="https://leaselynx.co.za/logo-LeaseLynx.png" height="110" alt="LeaseLynx" style="display:block;"/>` +
+            `</div>` +
+            `<div style="padding:36px 40px;">` +
+            `<p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#2563eb;">OTP VERIFICATION</p>` +
+            `<h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#ffffff;">One-Time Password</h1>` +
+            `<p style="margin:0 0 28px;font-size:14px;color:#94a3b8;">Your OTP for ${AppName} verification is:</p>` +
+            `<p style="margin:0 0 28px;font-size:48px;font-weight:800;color:#ffffff;letter-spacing:8px;text-align:center;">` +
             code +
-            '</p></div></div></div></body></html>',
+            `</p>` +
+            `</div>` +
+            `<div style="border-top:1px solid rgba(255,255,255,0.06);padding:18px 40px;background:#080f1e;">` +
+            `<p style="margin:0;font-size:12px;color:#334155;">Sent via <strong style="color:#475569;">LeaseLynx</strong> &middot; <a href="mailto:support@leaselynx.co.za?subject=Spam%20report" style="color:#334155;text-decoration:none;">Report spam</a></p>` +
+            `</div>` +
+            `</div></div></div></body></html>`,
         });
         console.log('OTP sent', code);
         if (request.params?.docId) {

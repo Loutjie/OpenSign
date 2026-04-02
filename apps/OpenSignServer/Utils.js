@@ -196,8 +196,11 @@ export const formatTimeInTimezone = (date, timezone) => {
 
 // `getSecureUrl` is used to return local secure url if local files
 export const getSecureUrl = url => {
-  const fileUrl = new URL(url)?.pathname?.includes('files');
-  if (fileUrl) {
+  const parsedUrl = new URL(url);
+  // Only sign local Parse Server file URLs, not external storage (GCS/S3)
+  const isLocalFile = (parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1')
+    && parsedUrl.pathname?.includes('/files/');
+  if (isLocalFile) {
     try {
       const file = getSignedLocalUrl(url);
       if (file) {
@@ -215,33 +218,33 @@ export const getSecureUrl = url => {
 };
 
 export const mailTemplate = param => {
-  const themeColor = '#2563EB';
   const subject = `${param.senderName} has requested you to sign "${param.title}"`;
-  const AppName = appName;
-  const logo = `<img src='https://leaselynx.co.za/logo-LeaseLynx.png' height='50' />`;
 
   const body =
-    "<html><head><meta http-equiv='Content-Type' content='text/html;charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background:white;padding-bottom:20px'><div style='padding:10px'>" +
-    logo +
-    `</div><div style='padding:2px;font-family:system-ui;background-color:${themeColor}'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px'>Digital Signature Request</p></div><div><p style='padding:20px;font-size:14px;margin-bottom:10px'>` +
-    param.senderName +
-    ' has requested you to review and sign <strong>' +
-    param.title +
-    "</strong>.</p><div style='padding: 5px 0px 5px 25px;display:flex;flex-direction:row;justify-content:space-around'><table><tr><td style='font-weight:bold;font-family:sans-serif;font-size:15px'>Sender</td><td></td><td style='color:#626363;font-weight:bold'>" +
-    param.senderMail +
-    "</td></tr><tr><td style='font-weight:bold;font-family:sans-serif;font-size:15px'>Organization</td><td></td><td style='color:#626363;font-weight:bold'> " +
-    param.organization +
-    "</td></tr><tr><td style='font-weight:bold;font-family:sans-serif;font-size:15px'>Expires on</td><td></td><td style='color:#626363;font-weight:bold'>" +
-    param.localExpireDate +
-    "</td></tr><tr><td style='font-weight:bold;font-family:sans-serif;font-size:15px'>Note</td><td></td><td style='color:#626363;font-weight:bold'>" +
-    param.note +
-    "</td></tr><tr><td></td><td></td></tr></table></div> <div style='margin-left:70px'><a target=_blank href=" +
-    param.signingUrl +
-    "><button style='padding:12px;background-color:#2563EB;color:white;border:0px;font-weight:bold;margin-top:30px'>Sign here</button></a></div><div style='display:flex;justify-content:center;margin-top:10px'></div></div></div><div><p> This is an automated email from " +
-    AppName +
-    '. For any queries regarding this email, please contact the sender ' +
-    param.senderMail +
-    ` directly.</p></div></div></body></html>`;
+    `<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/></head>` +
+    `<body style="margin:0;background:#020617;font-family:system-ui,-apple-system,sans-serif;">` +
+    `<div style="background:#020617;padding:40px 16px;">` +
+    `<div style="max-width:580px;margin:0 auto;">` +
+    `<div style="background:#0f172a;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">` +
+    `<div style="padding:36px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">` +
+    `<img src="https://leaselynx.co.za/logo-LeaseLynx.png" height="110" alt="LeaseLynx" style="display:block;"/>` +
+    `</div>` +
+    `<div style="padding:36px 40px;">` +
+    `<p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fb923c;">SIGNATURE REQUEST</p>` +
+    `<h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#ffffff;">Digital Signature Request</h1>` +
+    `<p style="margin:0 0 28px;font-size:14px;color:#94a3b8;">${param.senderName} has requested you to review and sign <strong style="color:#e2e8f0;">${param.title}</strong>.</p>` +
+    `<table style="width:100%;border-collapse:collapse;margin-bottom:28px;">` +
+    `<tr><td style="padding:8px 0;font-size:13px;color:#64748b;width:110px;">Sender</td><td style="padding:8px 0;font-size:13px;color:#cbd5e1;font-weight:600;">${param.senderMail}</td></tr>` +
+    `<tr><td style="padding:8px 0;font-size:13px;color:#64748b;width:110px;">Organization</td><td style="padding:8px 0;font-size:13px;color:#cbd5e1;font-weight:600;">${param.organization}</td></tr>` +
+    `<tr><td style="padding:8px 0;font-size:13px;color:#64748b;width:110px;">Expires on</td><td style="padding:8px 0;font-size:13px;color:#cbd5e1;font-weight:600;">${param.localExpireDate}</td></tr>` +
+    `<tr><td style="padding:8px 0;font-size:13px;color:#64748b;width:110px;">Note</td><td style="padding:8px 0;font-size:13px;color:#cbd5e1;font-weight:600;">${param.note}</td></tr>` +
+    `</table>` +
+    `<a href="${param.signingUrl}" target="_blank" style="display:inline-block;padding:14px 36px;background-color:#2563eb;color:#ffffff;text-decoration:none;font-weight:700;font-size:14px;text-transform:uppercase;letter-spacing:1px;border-radius:8px;">SIGN HERE</a>` +
+    `</div>` +
+    `<div style="border-top:1px solid rgba(255,255,255,0.06);padding:18px 40px;background:#080f1e;">` +
+    `<p style="margin:0;font-size:12px;color:#334155;">Sent via <strong style="color:#475569;">LeaseLynx</strong> &middot; <a href="mailto:support@leaselynx.co.za?subject=Spam%20report" style="color:#334155;text-decoration:none;">Report spam</a></p>` +
+    `</div>` +
+    `</div></div></div></body></html>`;
 
   return { subject, body };
 };

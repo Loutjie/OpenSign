@@ -121,8 +121,6 @@ async function updateDoc(docId, url, userId, ipAddress, data, className, sign, d
 async function sendNotifyMail(doc, signUser, mailProvider, publicUrl) {
   try {
     const TenantAppName = appName;
-    const logo =
-      "<img src='https://leaselynx.co.za/logo-LeaseLynx.png' height='50' style='padding:20px'/>";
 
     const auditTrailCount = doc?.AuditTrail?.filter(x => x.Activity === 'Signed')?.length || 0;
     const removePrefill =
@@ -136,14 +134,41 @@ async function sendNotifyMail(doc, signUser, mailProvider, publicUrl) {
       const creatorEmail = doc.ExtUserPtr.Email;
       const signerName = signUser.Name;
       const signerEmail = signUser.Email;
-      const viewDocUrl = `${publicUrl}/recipientSignPdf/${doc.objectId}`;
       const subject = `Document "${pdfName}" has been signed by ${signerName}`;
-      const body =
-        "<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'/></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white'>" +
-        `<div>${logo}</div><div style='padding:2px;font-family:system-ui;background-color:#2563EB'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px'>Document signed by ${signerName}</p>` +
-        `</div><div style='padding:20px;font-family:system-ui;font-size:14px'><p>Dear ${creatorName},</p><p>${pdfName} has been signed by ${signerName} "${signerEmail}" successfully</p>` +
-        `<p><a href=${viewDocUrl} target=_blank>View Document</a></p></div></div><div><p>This is an automated email from ${TenantAppName}. For any queries regarding this email, ` +
-        `please contact the sender ${creatorEmail} directly.</p></div></div></body></html>`;
+      const body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/></head>
+        <body style="margin:0;background:#020617;font-family:system-ui,-apple-system,sans-serif;">
+        <div style="background:#020617;padding:40px 16px;">
+        <div style="max-width:580px;margin:0 auto;">
+        <div style="background:#0f172a;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+          <div style="padding:36px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <img src="https://leaselynx.co.za/logo-LeaseLynx.png" height="110" alt="LeaseLynx" style="display:block;"/>
+          </div>
+          <div style="padding:36px 40px;">
+            <p style="margin:0 0 10px;font-size:11px;font-weight:800;color:#fb923c;text-transform:uppercase;letter-spacing:0.2em;">Signature Update</p>
+            <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#f1f5f9;letter-spacing:-0.4px;line-height:1.2;">A signer has completed their signature</h1>
+            <p style="margin:0 0 28px;font-size:14px;color:#64748b;">Document: ${pdfName}</p>
+            <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;line-height:1.7;">Dear <strong style="color:#f1f5f9;">${creatorName}</strong>,</p>
+            <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;line-height:1.7;"><strong style="color:#f1f5f9;">${signerName}</strong> (${signerEmail}) has signed the document. ${remainingSign} signature${remainingSign === 1 ? '' : 's'} remaining.</p>
+            <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:18px 20px;margin:0 0 24px;">
+              <table style="border-collapse:collapse;width:100%;">
+                <tr>
+                  <td style="padding:5px 16px 5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;width:38%;">Progress</td>
+                  <td style="padding:5px 0;font-size:13px;color:#fb923c;font-weight:600;">${auditTrailCount} of ${signersCount} signed</td>
+                </tr>
+              </table>
+            </div>
+            <p style="margin:0;font-size:12px;color:#475569;line-height:1.6;">
+              You will receive a final email with the signed document once all parties have signed.
+            </p>
+          </div>
+          <div style="border-top:1px solid rgba(255,255,255,0.06);padding:18px 40px;background:#080f1e;">
+            <p style="margin:0;font-size:12px;color:#334155;">
+              Sent via <strong style="color:#475569;">${TenantAppName}</strong> &middot;
+              <a href="mailto:support@leaselynx.co.za?subject=Spam%20report" style="color:#334155;text-decoration:none;">Report spam</a>
+            </p>
+          </div>
+        </div>
+        </div></div></body></html>`;
 
       const params = {
         extUserId: sender.objectId,
@@ -169,7 +194,7 @@ async function sendCompletedMail(obj) {
   const pdfName = doc.Name;
   const TenantAppName = appName;
   const logo =
-    "<img src='https://leaselynx.co.za/logo-LeaseLynx.png' height='50' style='padding:20px'/>";
+    "<img src='https://leaselynx.co.za/logo-LeaseLynx.png' height='110' alt='LeaseLynx' style='display:block;'/>";
 
   let signersMail;
   if (doc?.Signers?.length > 0) {
@@ -182,11 +207,47 @@ async function sendCompletedMail(obj) {
   }
   const recipient = signersMail;
   let subject = `Document "${pdfName}" has been signed by all parties`;
-  let body =
-    "<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8' /></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white'>" +
-    `<div>${logo}</div><div style='padding:2px;font-family:system-ui;background-color:#2563EB'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px'>Document signed successfully</p></div><div>` +
-    `<p style='padding:20px;font-family:system-ui;font-size:14px'>All parties have successfully signed the document <b>"${pdfName}"</b>. Kindly download the document from the attachment.</p>` +
-    `</div></div><div><p>This is an automated email from ${TenantAppName}. For any queries regarding this email, please contact the sender ${sender.Email} directly.</p></div></div></body></html>`;
+  let body = `<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/></head>
+    <body style="margin:0;background:#020617;font-family:system-ui,-apple-system,sans-serif;">
+    <div style="background:#020617;padding:40px 16px;">
+    <div style="max-width:580px;margin:0 auto;">
+    <div style="background:#0f172a;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">
+      <div style="padding:36px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        ${logo}
+      </div>
+      <div style="padding:36px 40px;">
+        <p style="margin:0 0 10px;font-size:11px;font-weight:800;color:#22c55e;text-transform:uppercase;letter-spacing:0.2em;">Signing Complete</p>
+        <h1 style="margin:0 0 8px;font-size:24px;font-weight:700;color:#f1f5f9;letter-spacing:-0.4px;line-height:1.2;">All parties have signed</h1>
+        <p style="margin:0 0 28px;font-size:14px;color:#64748b;">Document: ${pdfName}</p>
+        <p style="margin:0 0 28px;font-size:14px;color:#94a3b8;line-height:1.7;">All parties have successfully signed <strong style="color:#f1f5f9;">"${pdfName}"</strong>. The signed document and completion certificate are attached to this email.</p>
+        <div style="background:#1e293b;border:1px solid rgba(255,255,255,0.06);border-radius:10px;padding:18px 20px;margin:0 0 24px;">
+          <table style="border-collapse:collapse;width:100%;">
+            <tr>
+              <td style="padding:5px 16px 5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;width:38%;">Status</td>
+              <td style="padding:5px 0;font-size:13px;color:#22c55e;font-weight:600;">Fully Executed</td>
+            </tr>
+            <tr style="border-top:1px solid rgba(255,255,255,0.04);">
+              <td style="padding:5px 16px 5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;">Signers</td>
+              <td style="padding:5px 0;font-size:13px;color:#e2e8f0;">${doc?.Signers?.map(x => x.Name).join(', ') || sender.Name}</td>
+            </tr>
+            <tr style="border-top:1px solid rgba(255,255,255,0.04);">
+              <td style="padding:5px 16px 5px 0;font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:0.12em;">Sent by</td>
+              <td style="padding:5px 0;font-size:13px;color:#94a3b8;">${sender.Name} (${sender.Email})</td>
+            </tr>
+          </table>
+        </div>
+        <p style="margin:0;font-size:12px;color:#475569;line-height:1.6;">
+          If you didn't expect this email, contact <a href="mailto:${sender.Email}" style="color:#64748b;text-decoration:underline;">${sender.Email}</a>.
+        </p>
+      </div>
+      <div style="border-top:1px solid rgba(255,255,255,0.06);padding:18px 40px;background:#080f1e;">
+        <p style="margin:0;font-size:12px;color:#334155;">
+          Sent via <strong style="color:#475569;">${TenantAppName}</strong> &middot;
+          <a href="mailto:support@leaselynx.co.za?subject=Spam%20report" style="color:#334155;text-decoration:none;">Report spam</a>
+        </p>
+      </div>
+    </div>
+    </div></div></body></html>`;
 
   if (obj?.isCustomMail) {
     const tenant = sender?.TenantId;

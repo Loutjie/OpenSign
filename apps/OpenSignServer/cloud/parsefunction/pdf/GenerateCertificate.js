@@ -18,16 +18,18 @@ export default async function GenerateCertificate(docDetails) {
   const { width, height } = page.getSize();
   const startX = 15;
   const startY = 15;
-  const borderColor = rgb(0.12, 0.12, 0.12);
-  const titleColor = rgb(0, 0.2, 0.4); //rgb(0, 0.53, 0.71);
-  const titleUnderline = rgb(0, 0.2, 0.4); // rgb(0.12, 0.12, 0.12);
+  const borderColor = rgb(0.2, 0.25, 0.35);
+  const titleColor = rgb(0.15, 0.39, 0.92);
+  const titleUnderline = rgb(0.15, 0.39, 0.92);
   const title = 25;
   const subtitle = 16;
   const text = 13;
   const signertext = 13;
   const timeText = 11;
-  const textKeyColor = rgb(0.12, 0.12, 0.12);
-  const textValueColor = rgb(0.3, 0.3, 0.3);
+  const textKeyColor = rgb(0.4, 0.45, 0.55);
+  const textValueColor = rgb(0.85, 0.88, 0.92);
+  const signerHeaderColor = rgb(0.98, 0.57, 0.24);
+  const signatureBoxBorder = rgb(0.15, 0.39, 0.92);
   const completedAt = docDetails?.completedAt ? new Date(docDetails?.completedAt) : new Date();
   const completedAtperTimezone = formatDateTime(completedAt, DateFormat, timezone, Is12Hr);
   const completedUTCtime = completedAtperTimezone;
@@ -71,6 +73,14 @@ export default async function GenerateCertificate(docDetails) {
   const ownerName = docDetails?.SenderName || docDetails.ExtUserPtr?.Name || 'n/a';
   const ownerEmail = docDetails?.SenderMail || docDetails.ExtUserPtr?.Email || 'n/a';
   const half = width / 2;
+  // Dark background fill
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width: width,
+    height: height,
+    color: rgb(0.06, 0.09, 0.16),
+  });
   // Draw a border
   page.drawRectangle({
     x: startX,
@@ -92,7 +102,7 @@ export default async function GenerateCertificate(docDetails) {
     y: 810,
     size: 12,
     font: timesRomanFont,
-    color: rgb(0.12, 0.12, 0.12),
+    color: textKeyColor,
   });
 
   page.drawText('Certificate of Completion', {
@@ -291,7 +301,7 @@ export default async function GenerateCertificate(docDetails) {
   page.drawLine({
     start: { x: 30, y: ipY - 6 },
     end: { x: width - 30, y: ipY - 6 },
-    color: rgb(0.12, 0.12, 0.12),
+    color: borderColor,
     thickness: 0.5,
   });
   let yPosition1 = ipY - 21;
@@ -310,7 +320,7 @@ export default async function GenerateCertificate(docDetails) {
       y: yPosition1,
       size: subtitle,
       font: timesRomanFont,
-      color: titleColor,
+      color: signerHeaderColor,
     });
     page.drawText('Name :', {
       x: 30,
@@ -422,7 +432,7 @@ export default async function GenerateCertificate(docDetails) {
       y: yPosition7 - 30,
       width: 104,
       height: 44,
-      borderColor: rgb(0.22, 0.18, 0.47),
+      borderColor: signatureBoxBorder,
       borderWidth: 1,
     });
     if (embedPng) {
@@ -436,7 +446,7 @@ export default async function GenerateCertificate(docDetails) {
     page.drawLine({
       start: { x: 30, y: yPosition8 },
       end: { x: width - 30, y: yPosition8 },
-      color: rgb(0.12, 0.12, 0.12),
+      color: borderColor,
       thickness: 0.5,
     });
 
@@ -464,6 +474,14 @@ export default async function GenerateCertificate(docDetails) {
         // Adjust the value as needed
         currentPageIndex++;
         currentPage = pdfDoc.addPage();
+        // Dark background fill
+        currentPage.drawRectangle({
+          x: 0,
+          y: 0,
+          width: width,
+          height: height,
+          color: rgb(0.06, 0.09, 0.16),
+        });
         currentPage.drawRectangle({
           x: startX,
           y: startY,
@@ -488,7 +506,7 @@ export default async function GenerateCertificate(docDetails) {
         y: yPosition1,
         size: subtitle,
         font: timesRomanFont,
-        color: titleColor,
+        color: signerHeaderColor,
       });
       currentPage.drawText('Name :', {
         x: 30,
@@ -598,7 +616,7 @@ export default async function GenerateCertificate(docDetails) {
         y: yPosition7 - 27,
         width: 104,
         height: 44,
-        borderColor: rgb(0.22, 0.18, 0.47),
+        borderColor: signatureBoxBorder,
         borderWidth: 1,
       });
       if (embedPng) {
@@ -613,7 +631,7 @@ export default async function GenerateCertificate(docDetails) {
       currentPage.drawLine({
         start: { x: 30, y: yPosition8 },
         end: { x: width - 30, y: yPosition8 },
-        color: rgb(0.12, 0.12, 0.12),
+        color: borderColor,
         thickness: 0.5,
       });
 

@@ -35,10 +35,6 @@ export default async function forwardDoc(request) {
       try {
         let mailRes;
         for (let i = 0; i < recipients.length; i++) {
-          const logo = `<img src='https://leaselynx.co.za/logo-LeaseLynx.png' height='50' style='padding:20px'/>`;
-
-          const themeColor = '#2563EB';
-
           let params = {
             extUserId: extUserId,
             pdfName: docName,
@@ -48,10 +44,24 @@ export default async function forwardDoc(request) {
             replyto: replyTo || '',
             from: from,
             html:
-              `<html><head><meta http-equiv='Content-Type' content='text/html; charset=UTF-8'/></head><body><div style='background-color:#f5f5f5;padding:20px'><div style='background-color:white'><div>` +
-              `${logo}</div><div style='padding:2px;font-family:system-ui;background-color:${themeColor}'><p style='font-size:20px;font-weight:400;color:white;padding-left:20px'>Document Copy</p></div><div>` +
-              `<p style='padding:20px;font-family:system-ui;font-size:14px'>A copy of the document <strong>${docName}</strong> is attached to this email. Kindly download the document from the attachment.</p>` +
-              `</div></div><div><p>This is an automated email from ${TenantAppName}. For any queries regarding this email, please contact the sender ${replyTo} directly.</p></div></div></body></html>`,
+              `<!DOCTYPE html><html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"/></head>` +
+              `<body style="margin:0;background:#020617;font-family:system-ui,-apple-system,sans-serif;">` +
+              `<div style="background:#020617;padding:40px 16px;">` +
+              `<div style="max-width:580px;margin:0 auto;">` +
+              `<div style="background:#0f172a;border-radius:16px;border:1px solid rgba(255,255,255,0.08);overflow:hidden;">` +
+              `<div style="padding:36px 40px 28px;border-bottom:1px solid rgba(255,255,255,0.06);">` +
+              `<img src="https://leaselynx.co.za/logo-LeaseLynx.png" height="110" alt="LeaseLynx" style="display:block;"/>` +
+              `</div>` +
+              `<div style="padding:36px 40px;">` +
+              `<p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#2563eb;">DOCUMENT COPY</p>` +
+              `<h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#ffffff;">Signed Document Copy</h1>` +
+              `<p style="margin:0 0 28px;font-size:14px;color:#94a3b8;">A copy of the document <strong style="color:#e2e8f0;">${docName}</strong> is attached to this email. Kindly download the document from the attachment.</p>` +
+              `<p style="margin:0;font-size:13px;color:#64748b;">This is an automated email from ${TenantAppName}. For any queries regarding this email, please contact the sender ${replyTo} directly.</p>` +
+              `</div>` +
+              `<div style="border-top:1px solid rgba(255,255,255,0.06);padding:18px 40px;background:#080f1e;">` +
+              `<p style="margin:0;font-size:12px;color:#334155;">Sent via <strong style="color:#475569;">LeaseLynx</strong> &middot; <a href="mailto:support@leaselynx.co.za?subject=Spam%20report" style="color:#334155;text-decoration:none;">Report spam</a></p>` +
+              `</div>` +
+              `</div></div></div></body></html>`,
           };
           mailRes = await sendMailWithAttachment(params);
           // console.log('mailRes', mailRes);
