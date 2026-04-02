@@ -136,8 +136,73 @@
   .icon-disabled {
     color: #9CA3AF;
   }
-  
+
   .icon-visible {
     color: #6B7280;
   }
+}
+
+/* ── OpenSign Dark Theme Fine-Tuning (LeaseLynx) ── */
+
+/* Signature widget placeholder blocks on PDF */
+[data-theme="opensigndark"] .signerComponent {
+  border-color: rgba(251, 146, 60, 0.5) !important;
+  background-color: rgba(251, 146, 60, 0.08) !important;
+}
+
+/* Checkbox/radio widget borders */
+[data-theme="opensigndark"] .op-checkbox {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+[data-theme="opensigndark"] .op-radio {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Select/dropdown dark styling */
+[data-theme="opensigndark"] select.op-select {
+  background-color: #1e293b;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+/* Date picker dark mode */
+[data-theme="opensigndark"] .react-datepicker {
+  background-color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+[data-theme="opensigndark"] .react-datepicker__header {
+  background-color: #1e293b;
+  border-bottom-color: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="opensigndark"] .react-datepicker__day,
+[data-theme="opensigndark"] .react-datepicker__day-name,
+[data-theme="opensigndark"] .react-datepicker__current-month {
+  color: #e2e8f0;
+}
+
+[data-theme="opensigndark"] .react-datepicker__day:hover {
+  background-color: #2563eb;
+  color: white;
+}
+
+[data-theme="opensigndark"] .react-datepicker__day--selected {
+  background-color: #2563eb;
+  color: white;
+}
+
+/* Text input widgets in dark mode */
+[data-theme="opensigndark"] input.op-input {
+  background-color: #1e293b;
+  border-color: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9;
+}
+
+/* PDF viewer surround */
+[data-theme="opensigndark"] .op-card {
+  background-color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.06);
 }
