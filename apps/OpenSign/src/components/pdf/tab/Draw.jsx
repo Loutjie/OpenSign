@@ -35,7 +35,7 @@ function Draw(props) {
               : props?.currWidgetsDetails?.type === "initials"
                 ? "intialSignatureCanvas"
                 : "signatureCanvas"
-          } border-[1.3px] border-gray-300 rounded-[10px]`
+          } border-[1.3px] border-base-300 rounded-[10px]`
         }}
         onEnd={() =>
           props?.handleSignatureChange(

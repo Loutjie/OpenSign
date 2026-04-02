@@ -30,7 +30,7 @@ function TypeSignature(props) {
           }}
         />
       </div>
-      <div className="border-[1px] border-[#d6d3d3] mt-[10px] rounded-[4px] tabWidth">
+      <div className="border-[1px] border-base-300 mt-[10px] rounded-[4px] tabWidth">
         {props?.fontOptions.map((font, ind) => {
           return (
             <div

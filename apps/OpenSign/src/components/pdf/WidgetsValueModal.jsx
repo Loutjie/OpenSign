@@ -72,7 +72,7 @@ const fontOptions = [
 ];
 const textInputcls =
   "op-input op-input-bordered op-input-sm focus:outline-none text-base-content hover:border-base-content w-full text-xs";
-const isTabCls = "bg-[#002864] text-white rounded-[15px] px-[10px] py-[4px]";
+const isTabCls = "bg-primary text-white rounded-[15px] px-[10px] py-[4px]";
 
 function WidgetsValueModal(props) {
   const dispatch = useDispatch();

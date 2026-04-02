@@ -17,7 +17,7 @@ function UploadImage(props) {
       {(props?.isImageSelect || props?.isStampOrImage) && !props?.image ? (
         <div className="flex justify-center">
           <div
-            className={`${props?.currWidgetsDetails?.type === "initials" ? "intialSignatureCanvas" : "signatureCanvas"} bg-white border-[1.3px] border-gray-300 flex flex-col justify-center items-center mb-[6px] cursor-pointer`}
+            className={`${props?.currWidgetsDetails?.type === "initials" ? "intialSignatureCanvas" : "signatureCanvas"} bg-white border-[1.3px] border-base-300 flex flex-col justify-center items-center mb-[6px] cursor-pointer`}
             onClick={() =>
               getImageRef(props?.currWidgetsDetails?.key).current.click()
             }
@@ -38,7 +38,7 @@ function UploadImage(props) {
         <>
           <div className="flex justify-center">
             <div
-              className={`${props?.currWidgetsDetails?.type === "initials" ? "intialSignatureCanvas" : "signatureCanvas"} bg-white border-[1.3px] border-gray-300 mb-[6px] overflow-hidden`}
+              className={`${props?.currWidgetsDetails?.type === "initials" ? "intialSignatureCanvas" : "signatureCanvas"} bg-white border-[1.3px] border-base-300 mb-[6px] overflow-hidden`}
             >
               <img
                 alt="print img"

@@ -14,7 +14,7 @@ function AgreementSign(props) {
             <div className="text-[11px] md:text-base text-base-content">
               <span>{t("agree-p1")}</span>
               <span
-                className="font-bold text-blue-600 cursor-pointer"
+                className="font-bold text-primary cursor-pointer"
                 onClick={() => {
                   setIsShowAgreeTerms(true);
                 }}
