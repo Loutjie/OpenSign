@@ -34,7 +34,7 @@ const ModalUi = ({
           }}
         >
           {isLoader && (
-            <div className="absolute z-[999] h-full w-full flex justify-center items-center bg-black bg-opacity-30">
+            <div className="absolute z-[999] h-full w-full flex justify-center items-center bg-black/40">
               <Loader />
             </div>
           )}
