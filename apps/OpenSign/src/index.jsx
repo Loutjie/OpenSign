@@ -21,7 +21,10 @@ if (localStorage.getItem("showUpgradeProgress")) {
 }
 
 const savedTheme = localStorage.getItem("theme");
-if (savedTheme === "dark") {
+if (savedTheme === "light") {
+  document.documentElement.setAttribute("data-theme", "opensigncss");
+} else {
+  // Default to dark theme (LeaseLynx branding)
   document.documentElement.setAttribute("data-theme", "opensigndark");
 }
 
