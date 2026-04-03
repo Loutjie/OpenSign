@@ -6,7 +6,7 @@ const ALLOWED_COLORS = ["blue", "red", "black"];
 const COLOR_CLASS = {
   blue: "text-blue-600",
   red: "text-red-600",
-  black: "text-black",
+  black: "text-base-content",
   white: "text-white"
 };
 
@@ -52,7 +52,7 @@ function PenColorComponent({
               setPenColor?.(color);
               convertToImg && convertToImg?.(fontSelect, typedSignature, color);
             }}
-            className={`${COLOR_CLASS[color] || "text-base-content"} ${selected ? "border-current" : "border-white"} border-b-[2px] pb-0.5 cursor-pointer ${PEN_SIZE} fa-light fa-pen-nib`}
+            className={`${COLOR_CLASS[color] || "text-base-content"} ${selected ? "border-current" : "border-transparent"} border-b-[2px] pb-0.5 cursor-pointer ${PEN_SIZE} fa-light fa-pen-nib`}
           ></i>
         );
       })}

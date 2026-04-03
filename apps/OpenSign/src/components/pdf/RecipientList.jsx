@@ -229,7 +229,7 @@ const RecipientList = (props) => {
                         handleChangeSequence(e, ind, "up", null, obj);
                       }
                     }}
-                    className={ind === 0 ? "text-[gray]" : "text-black"}
+                    className={ind === 0 ? "text-[gray]" : "text-base-content"}
                   >
                     ▲
                   </div>
@@ -243,7 +243,7 @@ const RecipientList = (props) => {
                     className={
                       ind === props.signersdata.length - 1
                         ? "text-[gray]"
-                        : "text-black"
+                        : "text-base-content"
                     }
                   >
                     ▼

@@ -34,7 +34,7 @@ function SignerListComponent(props) {
         style={{ background: checkUserNameColor(props.obj) }}
         className="flex flex-shrink-0 w-[30px] h-[30px] rounded-full justify-center items-center mx-1"
       >
-        <span className="text-[12px] text-center font-bold text-black uppercase">
+        <span className="text-[12px] text-center font-bold text-base-content uppercase">
           {getFirstLetter(
             props.obj?.Name || props.obj?.email || props.obj?.Role
           )}

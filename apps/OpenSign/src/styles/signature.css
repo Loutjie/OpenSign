@@ -83,25 +83,25 @@
 
 /* Dark mode support for initials box in /managesign */
 [data-theme="opensigndark"] .intialSignature {
-  background-color: #1e293b !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 [data-theme="opensigndark"] .intialSignatureCanvas {
-  background-color: #1e293b !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Also support signature canvas for consistency */
 [data-theme="opensigndark"] .signatureCanvas {
-  background-color: #1e293b !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 /* Also support signature canvas for consistency */
 [data-theme="opensigndark"] .mysignatureCanvas {
-  background-color: #1e293b !important;
-  border-color: rgba(255, 255, 255, 0.08) !important;
+  background-color: #f1f5f9 !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
 .icon {
