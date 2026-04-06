@@ -84,7 +84,8 @@ function WidgetsValueModal(props) {
     lastIndex: lastWidget,
     typedSignFont,
     saveSignCheckbox: mysign,
-    myStamp
+    myStamp,
+    skipOptional
   } = useSelector((state) => state.widget);
   const { t } = useTranslation();
   const canvasRef = useRef(null);
@@ -1815,10 +1816,18 @@ function WidgetsValueModal(props) {
       const editableWidgets = (widgetsPosition?.placeHolder ?? []).flatMap(
         ({ pos = [], pageNumber }) =>
           pos
-            .filter(
-              ({ options }) =>
-                !options?.isReadOnly
-            )
+            .filter(({ options, type }) => {
+              // Skip read-only fields
+              if (options?.isReadOnly) return false;
+              // Skip already-completed fields (user has provided a response)
+              const hasResponse = type === "checkbox"
+                ? Array.isArray(options?.response) && options.response.length > 0
+                : !!options?.response;
+              if (hasResponse) return false;
+              // Skip optional fields if the preference is enabled
+              if (skipOptional && options?.status === "optional") return false;
+              return true;
+            })
             .map((widget) => ({ widget, pageNumber }))
       );
       //get current index of widget

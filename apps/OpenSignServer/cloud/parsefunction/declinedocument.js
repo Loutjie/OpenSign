@@ -53,7 +53,7 @@ async function sendDeclineMail(doc, publicUrl, userId, reason) {
 
     const params = {
       extUserId: sender.objectId,
-      from: TenantAppName,
+      from: appName,
       recipient: creatorEmail,
       subject: subject,
       pdfName: pdfName,
@@ -64,6 +64,30 @@ async function sendDeclineMail(doc, publicUrl, userId, reason) {
     console.log('err in sendnotifymail', err);
   }
 }
+async function sendDeclineWebhook(doc, docId, userId, reason) {
+  if (!doc.WebhookUrl) return;
+  try {
+    const removePrefill = doc?.Placeholders?.filter(x => x?.Role !== 'prefill') || [];
+    const signer = removePrefill.find(x => x?.signerPtr?.UserId?.objectId === userId);
+    await axios.post(doc.WebhookUrl, {
+      event: 'document_declined',
+      document_id: docId,
+      signer: {
+        name: signer?.signerPtr?.Name || '',
+        email: signer?.signerPtr?.Email || signer?.email || '',
+        role: signer?.Role || '',
+      },
+      decline_reason: reason || '',
+      is_completed: false,
+      total_signers: removePrefill.length,
+      signers_completed: 0,
+    });
+    console.log(`Webhook sent: document_declined → ${doc.WebhookUrl}`);
+  } catch (err) {
+    console.log(`Webhook failed: ${err.message}`);
+  }
+}
+
 export default async function declinedocument(request) {
   const docId = request.params.docId;
   const reason = request.params?.reason || '';
@@ -86,6 +110,7 @@ export default async function declinedocument(request) {
         updateDoc.set('DeclineBy', declineBy);
         await updateDoc.save(null, { useMasterKey: true });
         sendDeclineMail(_doc, publicUrl, userId, reason);
+        await sendDeclineWebhook(_doc, docId, userId, reason);
         return 'document declined';
       } else {
         if (!request?.user) {
@@ -96,6 +121,7 @@ export default async function declinedocument(request) {
         updateDoc.set('DeclineBy', declineBy);
         await updateDoc.save(null, { useMasterKey: true });
         sendDeclineMail(_doc, publicUrl, userId, reason);
+        await sendDeclineWebhook(_doc, docId, userId, reason);
         return 'document declined';
       }
     } else {

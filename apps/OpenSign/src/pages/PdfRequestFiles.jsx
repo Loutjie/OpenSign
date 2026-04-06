@@ -15,7 +15,8 @@ import {
   resetWidgetState,
   setPrefillImg,
   setTypedSignFont,
-  setMyStamp
+  setMyStamp,
+  setSkipOptional
 } from "../redux/reducers/widgetSlice";
 import {
   contractDocument,
@@ -82,6 +83,7 @@ function PdfRequestFiles(
   const isShowModal = useSelector((state) => state.widget.isShowModal);
   const defaultSignImg = useSelector((state) => state.widget.defaultSignImg);
   const myInitial = useSelector((state) => state.widget.myInitial);
+  const skipOptional = useSelector((state) => state.widget.skipOptional);
   const appName =
     "LeaseLynx";
   const [pdfDetails, setPdfDetails] = useState([]);
@@ -1967,7 +1969,7 @@ function PdfRequestFiles(
                       </div>
                       {/* Label + heading */}
                       <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#fb923c] mb-1">
-                        {t("signing-complete") || "Signing Complete"}
+                        Signing Complete
                       </span>
                       <h2 className="text-xl font-bold text-base-content mb-2">
                         {t("document-signed")}
@@ -1985,7 +1987,7 @@ function PdfRequestFiles(
                             onClick={handleDownload}
                           >
                             <i className="fa-light fa-arrow-down"></i>
-                            {t("download-signed-pdf") || "Download Signed PDF"}
+                            Download Signed PDF
                           </button>
                           <button
                             type="button"
@@ -1995,7 +1997,7 @@ function PdfRequestFiles(
                             }
                           >
                             <span>🏆</span>
-                            {t("download-certificate") || "Download Certificate"}
+                            Download Certificate
                           </button>
                           <button
                             type="button"
@@ -2146,6 +2148,7 @@ function PdfRequestFiles(
                               obj={obj}
                               signerPos={signerPos}
                               isSigned={false}
+                              isCurrentSigner={obj?.objectId === signerObjectId || obj?.Id === signerObjectId}
                             />
                           ))}
                         </div>
@@ -2171,6 +2174,23 @@ function PdfRequestFiles(
                           />
                         </div>
                       )}
+
+                    {/* Skip optional fields checkbox */}
+                    {!alreadySign && currentSigner && (
+                      <div className="px-4 pt-3 pb-1">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={skipOptional}
+                            onChange={(e) => dispatch(setSkipOptional(e.target.checked))}
+                            className="w-4 h-4 rounded accent-primary"
+                          />
+                          <span className="text-[12px] text-base-content/70">
+                            Skip optional fields
+                          </span>
+                        </label>
+                      </div>
+                    )}
 
                     {/* Widget component for modifications */}
                     {pdfDetails[0]?.AllowModifications &&

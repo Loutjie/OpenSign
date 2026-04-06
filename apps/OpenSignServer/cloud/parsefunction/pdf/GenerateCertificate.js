@@ -19,8 +19,8 @@ export default async function GenerateCertificate(docDetails) {
   const startX = 15;
   const startY = 15;
   const borderColor = rgb(0.2, 0.25, 0.35);
-  const titleColor = rgb(0.15, 0.39, 0.92);
-  const titleUnderline = rgb(0.15, 0.39, 0.92);
+  const titleColor = rgb(0.98, 0.57, 0.24);
+  const titleUnderline = rgb(0.98, 0.57, 0.24);
   const title = 25;
   const subtitle = 16;
   const text = 13;
@@ -30,6 +30,7 @@ export default async function GenerateCertificate(docDetails) {
   const textValueColor = rgb(0.85, 0.88, 0.92);
   const signerHeaderColor = rgb(0.98, 0.57, 0.24);
   const signatureBoxBorder = rgb(0.15, 0.39, 0.92);
+  const signatureBoxFill = rgb(0.75, 0.8, 0.88);
   const completedAt = docDetails?.completedAt ? new Date(docDetails?.completedAt) : new Date();
   const completedAtperTimezone = formatDateTime(completedAt, DateFormat, timezone, Is12Hr);
   const completedUTCtime = completedAtperTimezone;
@@ -90,11 +91,13 @@ export default async function GenerateCertificate(docDetails) {
     borderColor: borderColor,
     borderWidth: 1,
   });
+  // Scale logo proportionally to fit ~40px height
+  const logoScale = 40 / pngImage.height;
   page.drawImage(pngImage, {
     x: 30,
-    y: 790,
-    width: 100,
-    height: 25,
+    y: 785,
+    width: pngImage.width * logoScale,
+    height: 40,
   });
 
   page.drawText(generatedOn, {
@@ -432,6 +435,7 @@ export default async function GenerateCertificate(docDetails) {
       y: yPosition7 - 30,
       width: 104,
       height: 44,
+      color: signatureBoxFill,
       borderColor: signatureBoxBorder,
       borderWidth: 1,
     });
@@ -616,6 +620,7 @@ export default async function GenerateCertificate(docDetails) {
         y: yPosition7 - 27,
         width: 104,
         height: 44,
+        color: signatureBoxFill,
         borderColor: signatureBoxBorder,
         borderWidth: 1,
       });

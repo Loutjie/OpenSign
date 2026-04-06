@@ -15,7 +15,8 @@ const initialState = {
   typedSignFont: "Fasthand",
   signatureResponse: [],
   isBulkLoader: false,
-  invalidRow: { record: null, page: null, label: "" }
+  invalidRow: { record: null, page: null, label: "" },
+  skipOptional: true
 };
 
 const widgetSlice = createSlice({
@@ -92,6 +93,9 @@ const widgetSlice = createSlice({
     setInvalidRow: (state, action) => {
       state.invalidRow = action.payload;
     },
+    setSkipOptional: (state, action) => {
+      state.skipOptional = action.payload;
+    },
     resetWidgetState: () => initialState
   }
 });
@@ -111,7 +115,8 @@ export const {
   setMyStamp,
   setSignatureRes,
   setBulkLoader,
-  setInvalidRow
+  setInvalidRow,
+  setSkipOptional
 } = widgetSlice.actions;
 
 export default widgetSlice.reducer;

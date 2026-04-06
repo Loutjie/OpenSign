@@ -83,13 +83,13 @@ const DocSuccessPage = () => {
                 </div>
                 {/* Label + heading */}
                 <span className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#fb923c] mb-1">
-                  {t("signing-complete") || "Signing Complete"}
+                  Signing Complete
                 </span>
                 <h1 className="text-xl font-bold text-base-content mb-2">
                   {t("document-signed")}
                 </h1>
                 <p className="text-sm text-base-content/50 mb-6">
-                  {t("you-will-receive-email-shortly") || "You will receive a copy of the signed document via email."}
+                  You will receive a copy of the signed document via email.
                 </p>
               </div>
               {/* Action buttons — stacked full-width */}
@@ -100,7 +100,7 @@ const DocSuccessPage = () => {
                   onClick={() => handleDownload()}
                 >
                   <i className="fa-light fa-arrow-down"></i>
-                  {t("download-signed-pdf") || "Download Signed PDF"}
+                  Download Signed PDF
                 </button>
                 {pdfDetails?.[0]?.IsCompleted && (
                   <button
@@ -111,7 +111,7 @@ const DocSuccessPage = () => {
                     }
                   >
                     <span>🏆</span>
-                    {t("download-certificate") || "Download Certificate"}
+                    Download Certificate
                   </button>
                 )}
                 <button

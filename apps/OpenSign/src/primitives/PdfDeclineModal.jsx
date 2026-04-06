@@ -29,30 +29,104 @@ function CustomModal(props) {
     }
   };
 
+  // Determine if this is a decline (red) or expired (orange) modal
+  const isDeclineModal = props.footerMessage || props?.headMsg === t("document-declined");
+  const accentColor = isDeclineModal ? "#ef4444" : "#fb923c";
+  const iconClass = isDeclineModal ? "fa-solid fa-xmark" : "fa-solid fa-clock";
+
   return (
     props.show && (
       <dialog className="op-modal op-modal-open absolute z-[448]">
-        <div className="w-[95%] md:w-[60%] lg:w-[40%] op-modal-box p-0 overflow-y-auto hide-scrollbar text-sm">
+        <div
+          className="w-[95%] md:w-[440px] op-modal-box p-0 overflow-y-auto hide-scrollbar text-sm"
+          style={{
+            backgroundColor: "#0f172a",
+            border: "1px solid rgba(255,255,255,0.08)",
+            borderRadius: "0.75rem",
+          }}
+        >
           {props?.isLoader && (
-            <div className="absolute h-full w-full flex flex-col justify-center items-center z-[999] bg-[#e6f2f2]/80">
+            <div className="absolute h-full w-full flex flex-col justify-center items-center z-[999] bg-base-100/80 rounded-xl">
               <Loader />
             </div>
           )}
-          <h3 className="text-base-content font-bold text-lg pt-[15px] px-[20px]">
-            {props?.headMsg && props?.headMsg}
-          </h3>
-          {!isExtendExpiry && (
-            <div className="p-[10px] px-[20px]">
-              <p className="text-[15px] text-base-content">
-                {props.bodyMssg && props.bodyMssg}
+
+          <div className="flex flex-col items-center text-center px-6 pt-8 pb-2">
+            {/* Icon circle */}
+            <div
+              className="w-[56px] h-[56px] rounded-full flex items-center justify-center mb-4"
+              style={{
+                backgroundColor: `${accentColor}15`,
+                border: `2px solid ${accentColor}40`,
+              }}
+            >
+              <i className={`${iconClass} text-xl`} style={{ color: accentColor }}></i>
+            </div>
+
+            {/* Heading */}
+            <h3 className="text-base-content font-bold text-lg mb-2">
+              {props?.headMsg}
+            </h3>
+
+            {/* Body message */}
+            {!isExtendExpiry && props.bodyMssg && (
+              <p className="text-sm text-base-content/60 mb-4">
+                {props.bodyMssg}
               </p>
+            )}
+          </div>
+
+          {/* Decline confirmation: reason textarea + yes/close buttons */}
+          {props.footerMessage && !isExtendExpiry && (
+            <div className="px-6 pb-6">
+              <textarea
+                rows={3}
+                placeholder="Reason (optional)"
+                className="w-full px-4 py-3 rounded-lg text-sm text-base-content focus:outline-none"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+              ></textarea>
+              <div className="flex gap-3 mt-4">
+                <button
+                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm text-white"
+                  style={{ backgroundColor: "#ef4444" }}
+                  type="button"
+                  onClick={() => {
+                    props.declineDoc(reason);
+                    setReason("");
+                  }}
+                >
+                  {t("yes")}, {t("decline") || "Decline"}
+                </button>
+                <button
+                  type="button"
+                  className="flex-1 py-2.5 rounded-lg font-medium text-sm text-base-content"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
+                  onClick={() => {
+                    setReason("");
+                    props.setIsDecline({ isDeclined: false });
+                  }}
+                >
+                  {t("cancel")}
+                </button>
+              </div>
             </div>
           )}
-          {!isExtendExpiry && (
-            <div className="flex flex-row items-center">
+
+          {/* Expired: action buttons */}
+          {!props.footerMessage && !isExtendExpiry && (
+            <div className="flex flex-col gap-3 px-6 pb-6">
               {isCreator && (
                 <button
-                  className="op-btn op-btn-primary px-6 ml-[20px] mb-3 mt-1"
+                  className="w-full py-2.5 rounded-lg font-semibold text-sm text-white"
+                  style={{ backgroundColor: "#2563eb" }}
                   onClick={() => handleExtendBtn()}
                 >
                   {t("extend")}
@@ -60,54 +134,26 @@ function CustomModal(props) {
               )}
               {props.isDownloadBtn && (
                 <button
-                  className="op-btn op-btn-secondary ml-[10px] mb-3 mt-1"
+                  className="w-full py-2.5 rounded-lg font-medium text-sm text-base-content"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
                   onClick={() => props.handleDownloadBtn()}
                 >
+                  <i className="fa-light fa-arrow-down mr-2"></i>
                   {t("download")}
                 </button>
               )}
             </div>
           )}
-          {props.footerMessage && (
-            <>
-              <div className="mx-3 text-base-content">
-                <textarea
-                  rows={3}
-                  placeholder="Reason (optional)"
-                  className="px-4 op-textarea op-textarea-bordered focus:outline-none hover:border-base-content w-full text-xs"
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                ></textarea>
-              </div>
-              <div className="m-[15px]">
-                <button
-                  className="op-btn op-btn-primary mr-2 px-6"
-                  type="button"
-                  onClick={() => {
-                    props.declineDoc(reason);
-                    setReason("");
-                  }}
-                >
-                  {t("yes")}
-                </button>
-                <button
-                  type="button"
-                  className="op-btn op-btn-secondary"
-                  onClick={() => {
-                    setReason("");
-                    props.setIsDecline({ isDeclined: false });
-                  }}
-                >
-                  {t("close")}
-                </button>
-              </div>
-            </>
-          )}
+
+          {/* Extend expiry form */}
           {isExtendExpiry && (
-            <form className="mx-3 mb-3" onSubmit={handleUpdateExpiry}>
+            <form className="px-6 pb-6" onSubmit={handleUpdateExpiry}>
               <label
                 htmlFor="expiryDate"
-                className="ml-2 mt-2 text-base-content"
+                className="text-sm text-base-content/70 mb-2 block"
               >
                 {t("expiry-date")} {"(dd-mm-yyyy)"}
               </label>
@@ -115,17 +161,29 @@ function CustomModal(props) {
                 id="expiryDate"
                 type="date"
                 onClick={(e) => e?.currentTarget?.showPicker?.()}
-                className="rounded-full w-full px-4 op-input op-input-bordered op-input-md text-base-content focus:outline-none hover:border-base-content"
+                className="w-full px-4 py-2.5 rounded-lg text-sm text-base-content focus:outline-none"
+                style={{
+                  backgroundColor: "rgba(255,255,255,0.06)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                }}
                 defaultValue={props?.doc?.ExpiryDate?.iso?.split("T")?.[0]}
                 onChange={(e) => setExpiryDate(e.target.value)}
               />
-              <div className="flex flex-row items-center mt-2">
-                <button type="submit" className="op-btn op-btn-primary mr-2">
+              <div className="flex gap-3 mt-4">
+                <button
+                  type="submit"
+                  className="flex-1 py-2.5 rounded-lg font-semibold text-sm text-white"
+                  style={{ backgroundColor: "#2563eb" }}
+                >
                   {t("update")}
                 </button>
                 <button
                   type="button"
-                  className="op-btn op-btn-secondary"
+                  className="flex-1 py-2.5 rounded-lg font-medium text-sm text-base-content"
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                  }}
                   onClick={() => {
                     setExpiryDate("");
                     setIsExtendExpiry(false);

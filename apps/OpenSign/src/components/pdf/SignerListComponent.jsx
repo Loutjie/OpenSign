@@ -53,14 +53,17 @@ function SignerListComponent(props) {
     return `rgba(${r},${g},${b},${alpha})`;
   };
 
-  const bgColor = toRgba(cardColor, 0.3) || "rgba(255,255,255,0.06)";
-  const borderColor = toRgba(cardColor, 0.4) || "rgba(255,255,255,0.08)";
+  const isCurrentSigner = props.isCurrentSigner;
+  const bgColor = toRgba(cardColor, isCurrentSigner ? 0.4 : 0.3) || "rgba(255,255,255,0.06)";
+  const borderColor = toRgba(cardColor, isCurrentSigner ? 0.7 : 0.4) || "rgba(255,255,255,0.08)";
 
   return (
     <div
       style={{
         backgroundColor: bgColor,
-        border: `1px solid ${borderColor}`,
+        border: isCurrentSigner
+          ? `2px solid ${toRgba(cardColor, 0.8) || "rgba(255,255,255,0.3)"}`
+          : `1px solid ${borderColor}`,
         borderRadius: "0.5rem",
         marginLeft: "0.5rem",
         marginRight: "0.5rem",
@@ -88,6 +91,11 @@ function SignerListComponent(props) {
         >
           {isSigned ? (
             <i className="fa-solid fa-check text-success text-sm"></i>
+          ) : isCurrentSigner ? (
+            <i
+              className="fa-solid fa-pen text-sm"
+              style={{ color: "#fb923c" }}
+            ></i>
           ) : (
             <i
               className="fa-light fa-arrow-right text-sm"
@@ -103,6 +111,11 @@ function SignerListComponent(props) {
         <span className="text-[11px] text-base-content/50 truncate">
           {props.obj?.Role || props.obj?.Email || props.obj?.email}
         </span>
+        {isCurrentSigner && (
+          <span style={{ color: "#fb923c", fontSize: "10px", fontWeight: 600, marginTop: "2px" }}>
+            Your turn
+          </span>
+        )}
       </div>
     </div>
   );
