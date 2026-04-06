@@ -1,6 +1,6 @@
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Document, Page } from "react-pdf";
+import { Document } from "react-pdf";
 import { useSelector } from "react-redux";
 import { PDFDocument } from "pdf-lib";
 import {
@@ -18,7 +18,7 @@ function RenderAllPdfPage(props) {
   const [signPageNumber, setSignPageNumber] = useState([]);
   const [bookmarkColor, setBookmarkColor] = useState("");
   const isSidebar = useSelector((state) => state.sidebar.isOpen);
-  const [pageWidth, setPageWidth] = useState("");
+  const [pageWidth, setPageWidth] = useState(""); // kept for sidebar resize logic
 
   //set all number of pages after load pdf
   function onDocumentLoad({ numPages }) {
@@ -164,17 +164,13 @@ function RenderAllPdfPage(props) {
     }
   };
   return (
-    <div ref={pageContainer} className="hidden w-[20%] bg-base-100 md:block">
-      <div className="mx-2 pr-2 pt-2 pb-1 text-[15px] text-base-content font-semibold border-b-[1px] border-base-300">
-        {t("pages")}
-      </div>
+    <div ref={pageContainer} className="hidden w-[60px] bg-base-100 md:flex flex-col items-center pt-4 border-r !border-[rgba(255,255,255,0.08)]">
       <div
-        className={`flex h-[90%] flex-col items-center m-2  
-         autoSignScroll hide-scrollbar max-h-[100vh] `}
+        className="flex flex-col items-center gap-2 overflow-y-auto hide-scrollbar max-h-[calc(100vh-80px)] py-2"
       >
         <Document
           error=""
-          loading={t("loading-doc")}
+          loading={""}
           onLoadSuccess={onDocumentLoad}
           file={pdfDataBase64}
         >
@@ -183,9 +179,9 @@ function RenderAllPdfPage(props) {
               key={index}
               className={`${
                 props?.pageNumber - 1 === index
-                  ? "border-[red]"
-                  : "border-[#878787]"
-              } border-2 m-[10px] flex justify-center items-center relative`}
+                  ? "border-primary bg-primary/10"
+                  : "border-transparent hover:border-base-content/30"
+              } border-2 rounded-md w-[40px] h-[52px] flex justify-center items-center cursor-pointer transition-colors relative`}
               onClick={() => {
                 props?.setPageNumber(index + 1);
                 if (props?.setSignBtnPosition) {
@@ -194,20 +190,19 @@ function RenderAllPdfPage(props) {
               }}
             >
               {props?.signerPos && addSignatureBookmark(index)}
-              <Page
-                key={`page_${index + 1}`}
-                pageNumber={index + 1}
-                width={pageWidth - 60}
-                scale={1}
-                renderAnnotationLayer={false}
-                renderTextLayer={false}
-              />
+              <span className={`text-xs font-medium ${
+                props?.pageNumber - 1 === index
+                  ? "text-primary"
+                  : "text-base-content/60"
+              }`}>
+                {index + 1}
+              </span>
             </div>
           ))}
         </Document>
         {props?.isMergePdfBtn && (
           <button
-            className="mb-2 bg-base-100 px-2 py-2 ring-[0.5px] ring-base-content rounded-box flex gap-1 justify-center items-center"
+            className="w-[40px] h-[40px] flex justify-center items-center rounded-md border border-dashed border-base-content/30 hover:border-primary/50 transition-colors"
             onClick={() => mergePdfInputRef.current.click()}
             title={t("add-pages")}
           >
@@ -218,10 +213,7 @@ function RenderAllPdfPage(props) {
               ref={mergePdfInputRef}
               onChange={handleFileUpload}
             />
-            <i className="fa-light fa-plus text-gray-500"></i>
-            <span className="text-xs lg:text-sm text-base-content">
-              {t("add-pages")}
-            </span>
+            <i className="fa-light fa-plus text-base-content/50 text-xs"></i>
           </button>
         )}
       </div>

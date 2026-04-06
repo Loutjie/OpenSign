@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import { useRef, useState } from "react";
 import PrevNext from "./PrevNext";
 import {
   base64ToArrayBuffer,
@@ -186,7 +186,7 @@ function Header(props) {
     }
   };
   return (
-    <div className="flex py-[5px]">
+    <div className="flex py-2 bg-base-200 border-b !border-[rgba(255,255,255,0.08)]">
       {isMobile && props?.isShowHeader ? (
         <div
           id="navbar"
@@ -475,20 +475,68 @@ function Header(props) {
           </div>
         </div>
       ) : (
-        <div className="flex flex-wrap justify-between items-center w-full gap-y-1 ml-1">
-          <PrevNext
-            pageNumber={props?.pageNumber}
-            allPages={props?.allPages}
-            changePage={props?.changePage}
-          />
-          {props?.isPlaceholder ? (
-            <>
-              <div className="flex mx-[100px] lg:mx-0 order-last lg:order-none"></div>
-              <div className="flex">
+        <div className="flex justify-between items-center w-full px-4">
+          {/* Left: Logo */}
+          <div className="flex items-center">
+            <img
+              src="https://leaselynx.co.za/logo-LeaseLynx.png"
+              alt="LeaseLynx"
+              className="h-[32px] object-contain"
+            />
+          </div>
+
+          {/* Right: Zoom controls + action buttons */}
+          <div className="flex items-center gap-3">
+            {/* Page indicator + Zoom controls */}
+            <div className="hidden md:flex items-center gap-1 bg-base-300/60 rounded-lg px-2 py-1">
+              <button
+                type="button"
+                className="text-base-content/60 hover:text-base-content px-1 text-sm disabled:opacity-30"
+                onClick={() => props?.changePage(-1)}
+                disabled={props?.pageNumber <= 1}
+              >
+                <i className="fa-light fa-chevron-left"></i>
+              </button>
+              <span className="text-xs text-base-content/70 min-w-[50px] text-center font-medium">
+                {props?.pageNumber || 1} / {props?.allPages || "--"}
+              </span>
+              <button
+                type="button"
+                className="text-base-content/60 hover:text-base-content px-1 text-sm disabled:opacity-30"
+                onClick={() => props?.changePage(1)}
+                disabled={props?.pageNumber >= props?.allPages}
+              >
+                <i className="fa-light fa-chevron-right"></i>
+              </button>
+              <div className="w-px h-4 bg-base-content/20 mx-1"></div>
+              <button
+                type="button"
+                className="text-base-content/60 hover:text-base-content px-1 text-sm"
+                onClick={() => props?.clickOnZoomOut()}
+                title={t("zoom-out")}
+              >
+                <i className="fa-light fa-minus"></i>
+              </button>
+              <span className="text-xs text-base-content/70 min-w-[40px] text-center font-medium">
+                {props?.zoomPercent ? `${props.zoomPercent}%` : "100%"}
+              </span>
+              <button
+                type="button"
+                className="text-base-content/60 hover:text-base-content px-1 text-sm"
+                onClick={() => props?.clickOnZoomIn()}
+                title={t("zoom-in")}
+              >
+                <i className="fa-light fa-plus"></i>
+              </button>
+            </div>
+
+            {/* Action buttons - contextual */}
+            {props?.isPlaceholder ? (
+              <div className="flex items-center gap-2">
                 {props?.setIsEditTemplate && (
                   <button
                     onClick={() => props?.setIsEditTemplate(true)}
-                    className="outline-none border-none text-center mr-[3px]"
+                    className="outline-none border-none text-center"
                   >
                     <i className="fa-light fa-gear fa-lg text-base-content"></i>
                   </button>
@@ -497,7 +545,7 @@ function Header(props) {
                   <button
                     onClick={() => window.history.go(-2)}
                     type="button"
-                    className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
+                    className="op-btn op-btn-ghost text-base-content op-btn-sm"
                   >
                     {t("back")}
                   </button>
@@ -505,7 +553,7 @@ function Header(props) {
                 <button
                   disabled={props?.isMailSend && true}
                   data-tut="headerArea"
-                  className="op-btn op-btn-primary op-btn-sm mr-[3px]"
+                  className="op-btn op-btn-primary op-btn-sm"
                   onClick={() => props?.handleSaveDoc()}
                 >
                   {props?.completeBtnTitle
@@ -515,103 +563,20 @@ function Header(props) {
                       : t("send")}
                 </button>
               </div>
-            </>
-          ) : props?.isPdfRequestFiles || props?.isSelfSign ? (
-            props?.alreadySign || (props?.isSelfSign && props?.isCompleted) ? (
-              <div className="flex flex-row">
-                <button
-                  onClick={(e) =>
-                    handleToPrint(e, setIsDownloading, props?.pdfDetails)
-                  }
-                  type="button"
-                  className="op-btn op-btn-neutral op-btn-sm mr-[3px] shadow"
-                >
-                  <i
-                    className="fa-light fa-print py-[3px]"
-                    aria-hidden="true"
-                  ></i>
-                  <span className="hidden lg:block">{t("print")}</span>
-                </button>
-                {
-                    props?.isCompleted && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleDownloadCertificate(
-                            props?.pdfDetails,
-                            setIsDownloading
-                          )
-                        }
-                        className="op-btn op-btn-secondary op-btn-sm mr-[3px] shadow"
-                      >
-                        <i
-                          className="fa-light fa-award py-[3px]"
-                          aria-hidden="true"
-                        ></i>
-                        <span className="hidden lg:block">
-                          {t("certificate")}
-                        </span>
-                      </button>
-                    )
-                }
-                <button
-                  type="button"
-                  className="op-btn op-btn-primary op-btn-sm mr-[3px] shadow"
-                  onClick={() => handleDownloadBtn()}
-                >
-                  <i
-                    className="fa-light fa-download py-[3px]"
-                    aria-hidden="true"
-                  ></i>
-                  <span className="hidden lg:block">{t("download")}</span>
-                </button>
-              </div>
-            ) : (
-              <div className="flex" data-tut="reactourFifth">
-                {props?.currentSigner && (
-                  <>
-                    {props?.templateId && (
-                      <button
-                        onClick={() => handleDownloadDoc()}
-                        type="button"
-                        className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
-                      >
-                        <span className="hidden lg:block">{t("download")}</span>
-                      </button>
-                    )}
-                    {!props?.isSelfSign && (
-                      <button
-                        className="op-btn op-btn-secondary op-btn-sm mr-[3px] shadow"
-                        onClick={() => handleDeclinePdfAlert()}
-                      >
-                        {t("decline")}
-                      </button>
-                    )}
-                    {!props?.templateId && (
-                      <button
-                        type="button"
-                        className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
-                        onClick={() => handleDownloadDoc()}
-                      >
-                        <i className="fa-light fa-arrow-down font-semibold lg:hidden"></i>
-                        <span className="hidden lg:block">{t("download")}</span>
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="op-btn op-btn-primary op-btn-sm mr-[3px] shadow"
-                      onClick={() => props?.embedWidgetsData()}
-                    >
-                      {t("finish")}
-                    </button>
-                  </>
-                )}
-              </div>
-            )
-          ) : props?.isCompleted ? (
-            <div className="flex flex-row">
-              {
-                  props?.isCompleted && (
+            ) : props?.isPdfRequestFiles || props?.isSelfSign ? (
+              props?.alreadySign || (props?.isSelfSign && props?.isCompleted) ? (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) =>
+                      handleToPrint(e, setIsDownloading, props?.pdfDetails)
+                    }
+                    type="button"
+                    className="op-btn op-btn-neutral op-btn-sm"
+                  >
+                    <i className="fa-light fa-print" aria-hidden="true"></i>
+                    <span className="hidden lg:block">{t("print")}</span>
+                  </button>
+                  {props?.isCompleted && (
                     <button
                       type="button"
                       onClick={() =>
@@ -620,71 +585,114 @@ function Header(props) {
                           setIsDownloading
                         )
                       }
-                      className="op-btn op-btn-secondary op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
+                      className="op-btn op-btn-neutral op-btn-sm"
                     >
                       <i className="fa-light fa-award" aria-hidden="true"></i>
-                      <span className="hidden lg:block ml-1">
-                        {t("certificate")}
-                      </span>
+                      <span className="hidden lg:block">{t("certificate")}</span>
                     </button>
-                  )
-              }
+                  )}
+                  <button
+                    type="button"
+                    className="op-btn op-btn-primary op-btn-sm"
+                    onClick={() => handleDownloadBtn()}
+                  >
+                    <i className="fa-light fa-download" aria-hidden="true"></i>
+                    <span className="hidden lg:block">{t("download")}</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2" data-tut="reactourFifth">
+                  {props?.currentSigner && (
+                    <button
+                      type="button"
+                      className="op-btn op-btn-primary op-btn-sm font-semibold uppercase tracking-wide"
+                      onClick={() => props?.embedWidgetsData()}
+                    >
+                      {t("finish")}
+                    </button>
+                  )}
+                  {props?.isPublicTemplate && (
+                    <button
+                      type="button"
+                      className="op-btn op-btn-primary op-btn-sm font-semibold uppercase tracking-wide"
+                      onClick={() => props?.embedWidgetsData()}
+                    >
+                      {t("sign-now")}
+                    </button>
+                  )}
+                </div>
+              )
+            ) : props?.isCompleted ? (
+              <div className="flex items-center gap-2">
+                {props?.isCompleted && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      handleDownloadCertificate(
+                        props?.pdfDetails,
+                        setIsDownloading
+                      )
+                    }
+                    className="op-btn op-btn-neutral op-btn-sm gap-0 font-medium text-[12px]"
+                  >
+                    <i className="fa-light fa-award" aria-hidden="true"></i>
+                    <span className="hidden lg:block ml-1">{t("certificate")}</span>
+                  </button>
+                )}
+                <button
+                  onClick={(e) =>
+                    handleToPrint(e, setIsDownloading, props?.pdfDetails)
+                  }
+                  type="button"
+                  className="op-btn op-btn-neutral op-btn-sm gap-0 font-medium text-[12px]"
+                >
+                  <i className="fa-light fa-print" aria-hidden="true"></i>
+                  <span className="hidden lg:block ml-1">{t("print")}</span>
+                </button>
+                <button
+                  type="button"
+                  className="op-btn op-btn-primary op-btn-sm gap-0 font-medium text-[12px]"
+                  onClick={() => handleDownloadBtn()}
+                >
+                  <i className="fa-light fa-download" aria-hidden="true"></i>
+                  <span className="hidden lg:block ml-1">{t("download")}</span>
+                </button>
+                <button
+                  type="button"
+                  className="op-btn op-btn-info op-btn-sm gap-0 font-medium text-[12px]"
+                  onClick={() => props?.setIsEmail(true)}
+                >
+                  <i className="fa-light fa-envelope" aria-hidden="true"></i>
+                  <span className="hidden lg:block ml-1">{t("mail")}</span>
+                </button>
+              </div>
+            ) : props?.isPublicTemplate ? (
               <button
-                onClick={(e) =>
-                  handleToPrint(e, setIsDownloading, props?.pdfDetails)
-                }
                 type="button"
-                className="op-btn op-btn-neutral op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
-              >
-                <i className="fa-light fa-print" aria-hidden="true"></i>
-                <span className="hidden lg:block ml-1">{t("print")}</span>
-              </button>
-              <button
-                type="button"
-                className="op-btn op-btn-primary op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
-                // onClick={() => props?.setIsDownloadModal(true)}
-                onClick={() => handleDownloadBtn()}
-              >
-                <i className="fa-light fa-download" aria-hidden="true"></i>
-                <span className="hidden lg:block ml-1">{t("download")}</span>
-              </button>
-              <button
-                type="button"
-                className="op-btn op-btn-info op-btn-sm gap-0 font-medium text-[12px] mr-[3px] shadow"
-                onClick={() => props?.setIsEmail(true)}
-              >
-                <i className="fa-light fa-envelope" aria-hidden="true"></i>
-                <span className="hidden lg:block ml-1">{t("mail")}</span>
-              </button>
-            </div>
-          ) : props?.isPublicTemplate ? (
-            <div className="flex">
-              <button
-                type="button"
-                className="op-btn op-btn-primary op-btn-sm  shadow"
+                className="op-btn op-btn-primary op-btn-sm font-semibold uppercase tracking-wide"
                 onClick={() => props?.embedWidgetsData()}
               >
                 {t("sign-now")}
               </button>
-            </div>
-          ) : (
-            <div className="flex">
-              <button
-                onClick={() => window.history.go(-2)}
-                type="button"
-                className="op-btn op-btn-ghost text-base-content op-btn-sm mr-[3px]"
-              >
-                {t("back")}
-              </button>
-              <button
-                type="button"
-                className="op-btn op-btn-primary op-btn-sm mr-[3px]"
-                onClick={() => props?.embedWidgetsData()}
-              >
-                {t("finish")}
-              </button>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.history.go(-2)}
+                  type="button"
+                  className="op-btn op-btn-ghost text-base-content op-btn-sm"
+                >
+                  {t("back")}
+                </button>
+                <button
+                  type="button"
+                  className="op-btn op-btn-primary op-btn-sm font-semibold uppercase tracking-wide"
+                  onClick={() => props?.embedWidgetsData()}
+                >
+                  {t("finish")}
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       )}
       {isDownloading === "pdf" && (
