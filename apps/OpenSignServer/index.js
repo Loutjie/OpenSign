@@ -119,6 +119,11 @@ export const config = {
   // Your apps name. This will appear in the subject and body of the emails that are sent.
   appName: appName,
   allowClientClassCreation: false,
+  fileUpload: {
+    enableForPublic: true,
+    enableForAnonymousUser: true,
+    enableForAuthenticatedUser: true,
+  },
   allowExpiredAuthDataToken: false,
   enableInsecureAuthAdapters: false,
   databaseOptions: { allowPublicExplain: false },
@@ -168,8 +173,15 @@ export const config = {
 
 export const app = express();
 app.use(cors());
-app.use(express.json({ limit: '100mb' }));
-app.use(express.urlencoded({ limit: '100mb', extended: true }));
+// Skip body parsing for file uploads — Parse Server's FilesRouter handles binary content
+app.use((req, res, next) => {
+  if (req.path.includes('/files/') && req.method === 'POST') return next();
+  express.json({ limit: '100mb' })(req, res, next);
+});
+app.use((req, res, next) => {
+  if (req.path.includes('/files/') && req.method === 'POST') return next();
+  express.urlencoded({ limit: '100mb', extended: true })(req, res, next);
+});
 app.use(function (req, res, next) {
   req.headers['x-real-ip'] = getUserIP(req);
   const publicUrl = 'https://' + req?.get('host');

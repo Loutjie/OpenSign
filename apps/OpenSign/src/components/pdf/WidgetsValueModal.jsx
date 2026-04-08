@@ -1670,10 +1670,14 @@ function WidgetsValueModal(props) {
     } else {
       widgetsPosition = xyPosition;
     }
-    //generate all nested level in single level
+    //generate all nested level in single level, respecting skipOptional
     const flatPlaceholder = widgetsPosition?.flatMap((page) =>
       page.pos
-        .filter((widget) => !widget.options?.isReadOnly)
+        .filter((widget) => {
+          if (widget.options?.isReadOnly) return false;
+          if (skipOptional && widget.options?.status === "optional") return false;
+          return true;
+        })
         .map((widget) => ({
           widget,
           pageNumber: page.pageNumber
@@ -1683,13 +1687,13 @@ function WidgetsValueModal(props) {
     let alreadyValue = 0;
     widgetsPosition?.forEach((page) => {
       page.pos.forEach((field) => {
-        if (!field?.options?.isReadOnly) {
-          const isValueExist =
-            field.options?.response || field.options?.defaultValue;
-          totalWidget++;
-          if (isValueExist) {
-            alreadyValue++;
-          }
+        if (field?.options?.isReadOnly) return;
+        if (skipOptional && field.options?.status === "optional") return;
+        const isValueExist =
+          field.options?.response || field.options?.defaultValue;
+        totalWidget++;
+        if (isValueExist) {
+          alreadyValue++;
         }
       });
     });
@@ -1699,7 +1703,8 @@ function WidgetsValueModal(props) {
       handleCheckOptional();
       if (
         currWidgetsDetails?.key === lastWidget ||
-        flatPlaceholder?.length === 1
+        flatPlaceholder?.length === 1 ||
+        leftRequiredWidget === 0
       ) {
         setIsLastWidget(true);
       }
@@ -1783,27 +1788,30 @@ function WidgetsValueModal(props) {
 
   //function too use on click on next/finish button then update modal UI according to current widgets
   const handleClickOnNext = async (isFinishDoc) => {
-    if (
-      ["signature", "stamp", "image", "initials", drawWidget].includes(
-        currWidgetsDetails?.type
-      )
-    ) {
+    // When finishing, skip save/clear — all fields are already saved
+    if (!isFinishDoc) {
       if (
-        signature ||
-        image ||
-        myInitial ||
-        defaultSignImg ||
-        myStamp ||
-        typedSignature
+        ["signature", "stamp", "image", "initials", drawWidget].includes(
+          currWidgetsDetails?.type
+        )
       ) {
-        //function to save all type draw or image
-        handleSaveBtn();
-      } else {
-        clearWidgetResponse();
+        if (
+          signature ||
+          image ||
+          myInitial ||
+          defaultSignImg ||
+          myStamp ||
+          typedSignature
+        ) {
+          //function to save all type draw or image
+          handleSaveBtn();
+        } else {
+          clearWidgetResponse();
+        }
       }
-    }
-    if (isSave) {
-      handleclose();
+      if (isSave) {
+        handleclose();
+      }
     }
     //condition when there are no any details left for response and current widget is last widget then
     //on click on finish button embed all widget's details on pdf and finish document
@@ -1995,29 +2003,35 @@ function WidgetsValueModal(props) {
             </div>
           )}
           {isFinish ? (
-            <>
-              <div className="p-1 mt-3">
-                <span className="text-base text-base-content">
-                  {t("finish-mssg")}
-                </span>
+            <div className="flex flex-col items-center text-center py-4 px-2">
+              <div className="w-14 h-14 rounded-full bg-green-500/15 flex items-center justify-center mb-4">
+                <i className="fa-solid fa-circle-check text-green-400 text-3xl"></i>
               </div>
-              <div className="flex gap-3 items-center mt-4">
+              <h3 className="text-lg font-semibold text-base-content mb-1">
+                All fields completed
+              </h3>
+              <p className="text-sm text-base-content/60 mb-6 max-w-[280px]">
+                {t("finish-mssg")}
+              </p>
+              <div className="flex gap-3 w-full max-w-[280px]">
                 <button
                   type="button"
-                  className="op-btn op-btn-primary op-btn-sm px-4"
-                  onClick={() => handleFinish()}
-                >
-                  {t("finish")}
-                </button>
-                <button
-                  type="button"
-                  className="op-btn op-btn-secondary op-btn-sm px-[18px]"
+                  className="op-btn op-btn-sm flex-1 border-base-content/20 text-base-content/80 hover:bg-base-content/10"
                   onClick={() => dispatch(setIsShowModal({}))}
                 >
+                  <i className="fa-solid fa-magnifying-glass mr-1.5 text-xs"></i>
                   {t("review")}
                 </button>
+                <button
+                  type="button"
+                  className="op-btn op-btn-primary op-btn-sm flex-1"
+                  onClick={() => handleFinish()}
+                >
+                  <i className="fa-solid fa-paper-plane mr-1.5 text-xs"></i>
+                  {t("finish")}
+                </button>
               </div>
-            </>
+            </div>
           ) : (
             <>
               <div>
@@ -2074,7 +2088,6 @@ function WidgetsValueModal(props) {
                     <button
                       type="button"
                       className="op-btn op-btn-primary op-btn-sm"
-                      disabled={handleDisable()}
                       onClick={() => handleClickOnNext(true)} // isFinishDoc
                     >
                       {t("done")}

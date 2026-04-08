@@ -16,7 +16,8 @@ import {
   setPrefillImg,
   setTypedSignFont,
   setMyStamp,
-  setSkipOptional
+  setSkipOptional,
+  setLastIndex
 } from "../redux/reducers/widgetSlice";
 import {
   contractDocument,
@@ -336,7 +337,7 @@ function PdfRequestFiles(
         const isTourEnabled =
           documentData[0]?.IsTourEnabled === true ? true : false;
         const getCurrentSigner = getSigners?.find(
-          (data) => data.UserId.objectId === jsonSender?.objectId
+          (data) => data.UserId?.objectId === jsonSender?.objectId
         );
         currUserId = getCurrentSigner?.objectId
           ? getCurrentSigner.objectId
@@ -1821,7 +1822,8 @@ function PdfRequestFiles(
                 {isUiLoading && (
                   <div className="absolute h-full w-full flex flex-col justify-center items-center z-[999] bg-base-100/80">
                     <Loader />
-                    <span className="text-[13px]">{t("loading-mssg")}</span>
+                    <span className="text-[13px] mt-2 font-semibold text-base-content">Signing document...</span>
+                    <span className="text-[11px] text-base-content/50 mt-1">This may take a moment</span>
                   </div>
                 )}
                 {!isReqSignTourDisabled &&
@@ -2182,7 +2184,10 @@ function PdfRequestFiles(
                           <input
                             type="checkbox"
                             checked={skipOptional}
-                            onChange={(e) => dispatch(setSkipOptional(e.target.checked))}
+                            onChange={(e) => {
+                              dispatch(setSkipOptional(e.target.checked));
+                              dispatch(setLastIndex("")); // Reset so navigation recalculates last widget
+                            }}
                             className="w-4 h-4 rounded accent-primary"
                           />
                           <span className="text-[12px] text-base-content/70">
@@ -2212,14 +2217,29 @@ function PdfRequestFiles(
                     <div className="flex-1"></div>
 
                     {/* Bottom action buttons */}
-                    {currentSigner && !alreadySign && !isCompleted?.isCertificate && (
+                    {currentSigner && !alreadySign && !isCompleted?.isCertificate && (() => {
+                      // Check if all required fields have been completed
+                      const currentSignerWidgets = signerPos?.find((data) => data.Id === uniqueId);
+                      const allRequiredDone = currentSignerWidgets?.placeHolder?.every((page) =>
+                        page.pos.every((field) => {
+                          if (field.options?.isReadOnly) return true;
+                          if (field.options?.status !== 'required') return true;
+                          if (field.type === 'checkbox') {
+                            const minCount = field.options?.validation?.minRequiredCount;
+                            if (!minCount || parseInt(minCount) === 0) return true;
+                            return Array.isArray(field.options?.response) && field.options.response.length > 0;
+                          }
+                          return !!field.options?.response || !!field.options?.defaultValue;
+                        })
+                      ) ?? false;
+                      return (
                       <div className="px-4 pb-5 pt-3 mt-auto">
                         <button
                           type="button"
                           className="op-btn op-btn-primary w-full font-semibold uppercase tracking-wide text-sm py-3"
                           onClick={() => handleSignPdf()}
                         >
-                          {t("finish")}
+                          {allRequiredDone ? t("finish") : t("sign")}
                         </button>
                         {!pdfDetails?.[0]?.IsSelfSign && (
                           <button
@@ -2234,7 +2254,8 @@ function PdfRequestFiles(
                           </button>
                         )}
                       </div>
-                    )}
+                      );
+                    })()}
                   </div>
                 </div>
                 </div>
