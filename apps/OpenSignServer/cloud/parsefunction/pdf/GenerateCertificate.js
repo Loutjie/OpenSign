@@ -91,13 +91,18 @@ export default async function GenerateCertificate(docDetails) {
     borderColor: borderColor,
     borderWidth: 1,
   });
-  // Scale logo proportionally to fit ~40px height
-  const logoScale = 40 / pngImage.height;
+  // Scale logo proportionally to fit ~80px height (2x)
+  const logoScale = 80 / pngImage.height;
+  const logoHeight = 80;
+  // Center logo vertically between top border (height - startY) and title underline (745)
+  const logoAreaTop = height - startY;
+  const logoAreaBottom = 745;
+  const logoCenterY = logoAreaBottom + (logoAreaTop - logoAreaBottom - logoHeight) / 2;
   page.drawImage(pngImage, {
     x: 30,
-    y: 785,
+    y: logoCenterY,
     width: pngImage.width * logoScale,
-    height: 40,
+    height: logoHeight,
   });
 
   page.drawText(generatedOn, {
@@ -316,7 +321,7 @@ export default async function GenerateCertificate(docDetails) {
   let yPosition7 = yPosition6 - 20;
   let yPosition8 = yPosition7 - 35;
 
-  auditTrail.slice(0, 3).forEach(async (x, i) => {
+  auditTrail.slice(0, 2).forEach(async (x, i) => {
     const embedPng = x.Signature ? await pdfDoc.embedPng(x.Signature) : '';
     page.drawText(`Signer ${i + 1}`, {
       x: 30,
@@ -464,10 +469,10 @@ export default async function GenerateCertificate(docDetails) {
     yPosition8 = yPosition8 - 174;
   });
 
-  if (auditTrail.length > 3) {
+  if (auditTrail.length > 2) {
     let currentPageIndex = 1;
     let currentPage = page;
-    auditTrail.slice(3).forEach(async (x, i) => {
+    auditTrail.slice(2).forEach(async (x, i) => {
       const embedPng = x.Signature ? await pdfDoc.embedPng(x.Signature) : '';
 
       // Calculate remaining space on current page
@@ -505,7 +510,7 @@ export default async function GenerateCertificate(docDetails) {
         yPosition8 = currentPage.getHeight() - 190;
       }
 
-      currentPage.drawText(`Signer ${4 + i}`, {
+      currentPage.drawText(`Signer ${3 + i}`, {
         x: 30,
         y: yPosition1,
         size: subtitle,
