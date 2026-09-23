@@ -10,7 +10,12 @@ export class RelayError extends Error {
 
 async function idToken(fetchImpl, audience) {
   const url = `http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity?audience=${encodeURIComponent(audience)}`;
-  const res = await fetchImpl(url, { headers: { 'Metadata-Flavor': 'Google' } });
+  let res;
+  try {
+    res = await fetchImpl(url, { headers: { 'Metadata-Flavor': 'Google' } });
+  } catch (err) {
+    throw new RelayError(`Could not obtain an identity token for the mail relay: ${err.message}`, { status: 0, uncertain: false });
+  }
   if (!res.ok) throw new RelayError('Could not obtain an identity token for the mail relay.', { status: 0, uncertain: false });
   return (await res.text()).trim();
 }
