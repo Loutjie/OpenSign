@@ -321,6 +321,16 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
     expect((await rejection(attempt(4321)))?.code).withContext('old code after the lock: a new one is needed').toBe(FORBIDDEN);
     expect(logins).toEqual([]);
   });
+  // SendMailOTPv1 resets FailedAttempts with every new code, so only LockedUntil stops a
+  // guesser from requesting code after code and trying 5 guesses on each.
+  it('refuses even a newly requested code while the 15-minute lock lasts', async () => {
+    const { attempt, logins, table } = setup();
+    for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(1111));
+    clock = new Date(clock.getTime() + OTP_LOCK_MS - 60 * 1000);
+    Object.assign(table.rows[0], { OTP: 9876, FailedAttempts: 0 });
+    expect((await rejection(attempt(9876)))?.code).toBe(FORBIDDEN);
+    expect(logins).toEqual([]);
+  });
   it('a new code after the lock works again (SendMailOTPv1 resets FailedAttempts)', async () => {
     const { attempt, table } = setup();
     for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(1111));
