@@ -5,6 +5,7 @@ import { updateMailCount } from '../../Utils.js';
 import { relayMail } from '../../leaselynxRelay.js';
 import { spamReportFooter } from './sendMailv3.js';
 import { alertMailFailure } from './sendmailClient.js';
+import getPresignedUrl from './getSignedUrl.js';
 
 function safeUnlink(filePath, label = 'file') {
   if (fs.existsSync(filePath)) {
@@ -83,7 +84,7 @@ const isPdf = buffer => buffer.length >= 4 && buffer.subarray(0, 4).toString('la
 // complete, real PDF when a url is given.
 export default async function sendMailWithAttachment(
   params,
-  { relay = relayMail, downloadTimeoutMs = DOWNLOAD_TIMEOUT_MS } = {}
+  { relay = relayMail, downloadTimeoutMs = DOWNLOAD_TIMEOUT_MS, sign = getPresignedUrl } = {}
 ) {
   const extUserId = params?.extUserId || '';
   const message = {
@@ -103,7 +104,18 @@ export default async function sendMailWithAttachment(
   const testPdf = `test_${Math.floor(Math.random() * 5000)}.pdf`;
   try {
     if (params.url) {
-      const downloaded = await downloadToFile(params.url, testPdf, {
+      let downloadUrl;
+      try {
+        // The bucket is private: fetch through a fresh signature, never the stored URL.
+        downloadUrl = await sign(params.url);
+      } catch (err) {
+        alertMailFailure('document download failed; no email sent', {
+          documentId: message.documentId,
+          reason: err.message,
+        });
+        return { status: 'error' };
+      }
+      const downloaded = await downloadToFile(downloadUrl, testPdf, {
         timeoutMs: downloadTimeoutMs,
       });
       if (!downloaded.ok) {

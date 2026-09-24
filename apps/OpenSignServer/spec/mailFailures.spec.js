@@ -279,9 +279,11 @@ describe('B2 Parse mail adapter apiCallback', () => {
 describe('B4 sendMailWithAttachment download', () => {
   let server;
   let base;
+  const received = [];
   const pdfBytes = Buffer.from('%PDF-1.4 synthetic test document');
   beforeAll(async () => {
     server = http.createServer((req, res) => {
+      received.push(req.url);
       if (req.url === '/500.pdf') { res.writeHead(500); return res.end('server error'); }
       if (req.url === '/html.pdf') { res.writeHead(200, { 'Content-Type': 'text/html' }); return res.end('<html>not a pdf</html>'); }
       if (req.url === '/slow.pdf') {
@@ -317,6 +319,34 @@ describe('B4 sendMailWithAttachment download', () => {
     const sent = [];
     expect(await sendMailWithAttachment(params(base + '/slow.pdf'), { relay: async m => sent.push(m) })).toEqual({ status: 'success' });
     expect(sent[0].attachments[0].content).toEqual(pdfBytes);
+  });
+
+  // The bucket is private (#12): the stored URL is re-signed before the server fetches it.
+  it('downloads through the signed URL, not the stored one', async () => {
+    received.length = 0;
+    const sent = [];
+    const res = await sendMailWithAttachment(params(base + '/lease.pdf'), {
+      relay: async m => sent.push(m),
+      sign: async u => `${u}?signed=1`,
+    });
+    expect(res).toEqual({ status: 'success' });
+    expect(received).toEqual(['/lease.pdf?signed=1']);
+    expect(sent[0].attachments[0].content).toEqual(pdfBytes);
+  });
+
+  it('sends nothing, downloads nothing and ALERTs when signing fails', async () => {
+    received.length = 0;
+    const logs = captureLogs();
+    const sent = [];
+    const res = await sendMailWithAttachment(params(base + '/lease.pdf'), {
+      relay: async m => sent.push(m),
+      sign: async () => { throw new Error('signing refused'); },
+    });
+    expect(res).toEqual({ status: 'error' });
+    expect(sent).toEqual([]);
+    expect(received).toEqual([]);
+    expect(logs.join('\n')).toContain('[mail-relay][ALERT] document download failed');
+    expect(logs.join('\n')).toContain('signing refused');
   });
 
   describe('a server that never responds', () => {

@@ -14,7 +14,7 @@ import { appName, cloudServerUrl, serverAppId, useLocal } from './Utils.js';
 import { checkMailRelayConfig, makeApiCallback } from './leaselynxRelay.js';
 import { SSOAuth } from './auth/authadapter.js';
 import runDbMigrations from './migrationdb/index.js';
-import { validateSignedLocalUrl } from './cloud/parsefunction/getSignedUrl.js';
+import { validateSignedLocalUrl, isLocalStorage } from './cloud/parsefunction/getSignedUrl.js';
 let fsAdapter;
 
 if (useLocal !== 'true') {
@@ -39,6 +39,11 @@ if (useLocal !== 'true') {
         },
         endpoint: spacesEndpoint,
         signatureVersion: 'v4',
+        // Path-style, so the upload-time signature matches the path-style DO_BASEURL
+        // the adapter writes (a virtual-hosted signature on a path-style URL is invalid).
+        forcePathStyle: true,
+        requestChecksumCalculation: 'WHEN_REQUIRED',
+        responseChecksumValidation: 'WHEN_REQUIRED',
       },
     };
     fsAdapter = new S3Adapter(s3Options);
@@ -157,6 +162,15 @@ function getUserIP(request) {
 }
 
 app.use(async function (req, res, next) {
+  // With the S3 adapter (directAccess), files are read from the bucket through signed
+  // URLs, and Parse's /files route would serve any bucket object through the server's
+  // own credentials. Nothing legitimate reads it, so refuse it outright (#12). Read at
+  // request time, so the storage mode is the one the process runs with. HEAD too:
+  // Express answers it with the GET route.
+  const isRead = req.method === 'GET' || req.method === 'HEAD';
+  if (!isLocalStorage() && isRead && req.path.includes('/files/')) {
+    return res.status(403).json({ message: 'forbidden' });
+  }
   const isFilePath = req.path.includes('files') || false;
   if (isFilePath && req.method.toLowerCase() === 'get') {
     const serverUrl = new URL(process.env.SERVER_URL);
