@@ -74,10 +74,15 @@ export function makeSendmailv3({
         text: params.text || 'mail',
       });
     } catch (err) {
-      console.log(
-        `sendmailv3 relay error: ${err?.message} (status ${err?.status}, uncertain ${err?.uncertain})`
-      );
-      return { status: 'error' };
+      console.error('[mail-relay] sendmailv3 relay error', {
+        documentId,
+        message: err?.message,
+        status: err?.status,
+        uncertain: err?.uncertain,
+      });
+      // A thrown error, not a 200 with { status: 'error' }: callers that ignore the
+      // result still see the failure.
+      throw new Parse.Error(Parse.Error.SCRIPT_FAILED, 'Email could not be sent');
     }
     if (extUserId) {
       await countMail(extUserId);

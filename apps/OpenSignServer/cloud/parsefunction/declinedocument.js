@@ -1,15 +1,10 @@
 import axios from 'axios';
-import { appName, cloudServerUrl, serverAppId } from '../../Utils.js';
-const serverUrl = cloudServerUrl;
-const APPID = serverAppId;
-const masterKEY = process.env.MASTER_KEY;
-const headers = {
-  'Content-Type': 'application/json',
-  'X-Parse-Application-Id': APPID,
-  'X-Parse-Master-Key': masterKEY,
-};
+import { appName } from '../../Utils.js';
+import { alertMailFailure, errorSummary, postSendmailv3 } from './sendmailClient.js';
 
-async function sendDeclineMail(doc, publicUrl, userId, reason) {
+// Fire-and-forget (the decline is saved and the webhook tells LeaseLynx), so a failed
+// email to the owner is an ALERT log.
+export async function sendDeclineMail(doc, publicUrl, userId, reason, { post } = {}) {
   try {
     const removePrefill =
       doc?.Placeholders?.length > 0 && doc?.Placeholders?.filter(x => x?.Role !== 'prefill');
@@ -60,9 +55,9 @@ async function sendDeclineMail(doc, publicUrl, userId, reason) {
       pdfName: pdfName,
       html: body,
     };
-    await axios.post(serverUrl + '/functions/sendmailv3', params, { headers });
+    await postSendmailv3(params, { post });
   } catch (err) {
-    console.log('err in sendnotifymail', err);
+    alertMailFailure('decline email failed', { documentId: doc?.objectId }, err);
   }
 }
 async function sendDeclineWebhook(doc, docId, userId, reason) {
@@ -129,7 +124,7 @@ export default async function declinedocument(request) {
       throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document not found.');
     }
   } catch (err) {
-    console.log('err while decling doc', err);
+    console.log('err while decling doc', errorSummary(err));
     throw err;
   }
 }

@@ -17,6 +17,7 @@ import { SignPdf } from '@signpdf/signpdf';
 import { P12Signer } from '@signpdf/signer-p12';
 import { buildDownloadFilename, parseUploadFile } from '../../../utils/fileUtils.js';
 import sendMailWithAttachment from '../sendMailWithAttachment.js';
+import { alertMailFailure, errorSummary, postSendmailv3 } from '../sendmailClient.js';
 
 const serverUrl = cloudServerUrl; // process.env.SERVER_URL;
 const APPID = serverAppId;
@@ -55,7 +56,7 @@ async function uploadFile(pdfName, filepath) {
 
     return { imageUrl: fileUrl };
   } catch (err) {
-    console.log('Err ', err);
+    console.log('Err ', errorSummary(err));
     // below line of code is used to remove exported signed pdf file from exports folder
     unlinkFile(filepath);
   }
@@ -112,13 +113,14 @@ async function updateDoc(docId, url, userId, ipAddress, data, className, sign, d
       DocumentHash: documentHash && isCompleted ? documentHash : undefined,
     };
   } catch (err) {
-    console.log('update doc err ', err);
+    console.log('update doc err ', errorSummary(err));
     return 'err';
   }
 }
 
-// `sendNotifyMail` is used to send notification mail of signer signed the document
-async function sendNotifyMail(doc, signUser, mailProvider, publicUrl) {
+// `sendNotifyMail` is used to send notification mail of signer signed the document.
+// Fire-and-forget (the signature is already saved), so a failure is an ALERT log.
+export async function sendNotifyMail(doc, signUser, mailProvider, publicUrl, { post } = {}) {
   try {
     const TenantAppName = appName;
 
@@ -180,15 +182,15 @@ async function sendNotifyMail(doc, signUser, mailProvider, publicUrl) {
         html: body,
         mailProvider: mailProvider,
       };
-      await axios.post(serverUrl + '/functions/sendmailv3', params, { headers });
+      await postSendmailv3(params, { post });
     }
   } catch (err) {
-    console.log('err in sendnotifymail', err);
+    alertMailFailure('signer notification email failed', { documentId: doc?.objectId }, err);
   }
 }
 
 // `sendCompletedMail` is used to send copy of completed document mail
-async function sendCompletedMail(obj) {
+export async function sendCompletedMail(obj, { send = sendMailWithAttachment } = {}) {
   const url = obj.doc?.SignedUrl;
   const doc = obj.doc;
   const sender = obj.doc.ExtUserPtr;
@@ -324,13 +326,16 @@ async function sendCompletedMail(obj) {
     certificatePath: `./exports/signed_certificate_${doc.objectId}.pdf`,
     filename: docName,
   };
+  // Still fire-and-forget (LeaseLynx takes the completion email over in a follow-up), but
+  // a failure is an ALERT log, never silent.
   try {
-    const res = await sendMailWithAttachment(params);
-    // console.log("res ", res)
+    const res = await send(params);
     if (res?.status !== 'success') {
+      alertMailFailure('completion email failed', { documentId: doc.objectId, status: res?.status ?? null });
       unlinkFile(`./exports/signed_certificate_${doc.objectId}.pdf`);
     }
   } catch (err) {
+    alertMailFailure('completion email failed', { documentId: doc.objectId }, err);
     unlinkFile(`./exports/signed_certificate_${doc.objectId}.pdf`);
   }
 }
@@ -602,7 +607,7 @@ async function PDF(req) {
     try {
       await axios.put(`${docUrl}/${docId}`, body, { headers });
     } catch (err) {
-      console.log('err in saving debugginglog', err);
+      console.log('err in saving debugginglog', errorSummary(err));
     }
     unlinkFile(pfxname);
     throw err;

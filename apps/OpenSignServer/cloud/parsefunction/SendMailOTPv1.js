@@ -99,16 +99,24 @@ export function makeSendMailOTPv1(deps = {}) {
     // Anyone else gets the same answer and no email, so the endpoint cannot be used to
     // mail arbitrary addresses or to probe which addresses are users.
     const doc = docId ? await loadDoc(docId) : null;
-    const allowed = docId ? !!doc && isSigner(doc, email) : await isUser(email);
-    if (!allowed) {
-      console.log(
-        'SendOTPMailV1: recipient is not a signer of the document or a user; no OTP sent'
-      );
+    let refused = null;
+    if (docId) {
+      if (!doc) refused = 'document not found';
+      else if (!isSigner(doc, email)) refused = 'email is not a signer of the document';
+    } else if (!(await isUser(email))) {
+      refused = 'email is not a user';
+    }
+    if (refused) {
+      // Logged, never told to the caller (the same reply either way).
+      console.log('SendOTPMailV1: no OTP sent', { docId: docId || null, check: refused });
       return 'Otp send';
     }
 
     const code = Math.floor(1000 + Math.random() * 9000);
     const extUserId = doc?.ExtUserPtr?.objectId || null;
+    // Stored before it is sent: a stored code nobody received is harmless, a received
+    // code that was never stored cannot be used.
+    await saveOtp(email, code, TenantId);
     try {
       await relay({
         kind: 'otp',
@@ -127,7 +135,6 @@ export function makeSendMailOTPv1(deps = {}) {
     if (extUserId) {
       countMail(extUserId);
     }
-    await saveOtp(email, code, TenantId);
     return 'Otp send';
   };
 }

@@ -5,40 +5,51 @@ import {
   OTP_EXPIRES_MIN,
   RESEND_COOLDOWN_SEC,
 } from './deleteUtils.js';
+import { errorSummary } from '../../parsefunction/sendmailClient.js';
 
-export const deleteUserOtp = async (req, res) => {
-  const { userId } = req.params;
-
+async function findExtUser(userId) {
   const extUserQuery = new Parse.Query('contracts_Users');
   extUserQuery.equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: userId });
   extUserQuery.include('TenantId');
-  const extUser = await extUserQuery.first({ useMasterKey: true });
-  if (!extUser) return res.status(404).json({ error: 'User not found' });
+  return extUserQuery.first({ useMasterKey: true });
+}
 
-  const now = Date.now();
-  const lastSentAt = extUser.get('DeleteOTPSentAt')?.getTime?.() || 0;
-  const cooldownEndsAt = lastSentAt + RESEND_COOLDOWN_SEC * 1000;
-  const remainingMs = msUntil(now, cooldownEndsAt);
+export function makeDeleteUserOtp({ findUser = findExtUser, sendOtp = sendDeleteOtpEmail, now = () => Date.now() } = {}) {
+  return async (req, res) => {
+    const { userId } = req.params;
 
-  if (remainingMs > 0) {
-    return res
-      .status(429)
-      .json({ error: 'Cooldown not finished', retryAfterSec: Math.ceil(remainingMs / 1000) });
-  }
+    const extUser = await findUser(userId);
+    if (!extUser) return res.status(404).json({ error: 'User not found' });
 
-  const otp = generateOtp();
-  const expiresAt = new Date(now + OTP_EXPIRES_MIN * 60 * 1000);
+    const nowMs = now();
+    const lastSentAt = extUser.get('DeleteOTPSentAt')?.getTime?.() || 0;
+    const cooldownEndsAt = lastSentAt + RESEND_COOLDOWN_SEC * 1000;
+    const remainingMs = msUntil(nowMs, cooldownEndsAt);
 
-  try {
-    const resp = await sendDeleteOtpEmail(extUser, otp);
-    extUser.set('DeleteOTP', otp);
-    extUser.set('DeleteOTPExpiry', expiresAt);
-    extUser.set('DeleteOTPSentAt', new Date(now));
-    extUser.set('DeleteOTPTries', 0); // reset tries on resend
-    await extUser.save(null, { useMasterKey: true });
-    return res.json({ ok: true, cooldownSec: RESEND_COOLDOWN_SEC, expiresInMin: OTP_EXPIRES_MIN });
-  } catch (err) {
-    console.log('Error sending delete OTP (POST /otp):', err?.response?.data || err);
-    return res.status(500).json({ error: 'Failed to send OTP' });
-  }
-};
+    if (remainingMs > 0) {
+      return res
+        .status(429)
+        .json({ error: 'Cooldown not finished', retryAfterSec: Math.ceil(remainingMs / 1000) });
+    }
+
+    const otp = generateOtp();
+    const expiresAt = new Date(nowMs + OTP_EXPIRES_MIN * 60 * 1000);
+
+    try {
+      // Throws unless the email was sent: no { ok: true } for a code nobody received.
+      await sendOtp(extUser, otp);
+      extUser.set('DeleteOTP', otp);
+      extUser.set('DeleteOTPExpiry', expiresAt);
+      extUser.set('DeleteOTPSentAt', new Date(nowMs));
+      extUser.set('DeleteOTPTries', 0); // reset tries on resend
+      await extUser.save(null, { useMasterKey: true });
+      return res.json({ ok: true, cooldownSec: RESEND_COOLDOWN_SEC, expiresInMin: OTP_EXPIRES_MIN });
+    } catch (err) {
+      // Never the whole error: its request body carries the OTP.
+      console.log('Error sending delete OTP (POST /otp):', errorSummary(err));
+      return res.status(500).json({ error: 'Failed to send OTP' });
+    }
+  };
+}
+
+export const deleteUserOtp = makeDeleteUserOtp();

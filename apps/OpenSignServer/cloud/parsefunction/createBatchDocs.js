@@ -1,6 +1,8 @@
 import axios from 'axios';
 import { cloudServerUrl, mailTemplate, replaceMailVaribles, serverAppId } from '../../Utils.js';
 import { setDocumentCount } from '../../utils/CountUtils.js';
+import { alertMailFailure, errorSummary, postSendmailv3 } from './sendmailClient.js';
+import { makeMailQuota } from './mailGuard.js';
 
 import crypto from 'crypto';
 
@@ -40,25 +42,13 @@ function uuid() {
 
 const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
 const appId = serverAppId;
-// sendmailv3 refuses calls with neither a user nor the master key; these are server-side.
-const sendmailHeaders = {
-  'Content-Type': 'application/json',
-  'X-Parse-Application-Id': appId,
-  'X-Parse-Master-Key': process.env.MASTER_KEY,
-};
 
-async function sendOwnerSummaryEmail({
-  ownerEmail,
-  ownerName,
-  total,
-  created,
-  failed,
-  failedList,
-}) {
+// Not called anywhere at present; kept, and made to fail loudly like the other senders.
+export async function sendOwnerSummaryEmail(
+  { ownerEmail, ownerName, total, created, failed, failedList },
+  { post } = {}
+) {
   try {
-    const url = `${serverUrl}/functions/sendmailv3`;
-    const headers = sendmailHeaders;
-
     const subject = `Bulk send finished: ${failed} of ${total} failed to create`;
 
     const failureHtml = failedList?.length
@@ -89,9 +79,9 @@ async function sendOwnerSummaryEmail({
       html,
     };
 
-    await axios.post(url, params, { headers });
+    await postSendmailv3(params, { post });
   } catch (e) {
-    console.log('batchdoc Failed to send owner summary email:', e?.message || e);
+    alertMailFailure('bulk send owner summary email failed', {}, e);
   }
 }
 
@@ -101,10 +91,19 @@ async function deductcount(docsCount, extUserId) {
       setDocumentCount(extUserId);
     }
   } catch (err) {
-    console.log('batchdoc deductcount error: ', err);
+    console.log('batchdoc deductcount error: ', errorSummary(err));
   }
 }
-async function sendMail(document, publicUrl) {
+// The signers sendBatchMail emails: every non-prefill role, or only the first in order.
+export function batchMailRecipients(document) {
+  const signerMail = document?.Placeholders?.filter(x => x?.Role !== 'prefill') || [];
+  return document?.SendinOrder ? signerMail.slice(0, 1) : signerMail;
+}
+
+// Runs in the background after the document is created (the caller has its answer), so
+// failures are one ALERT log naming the recipients that were not emailed.
+export async function sendBatchMail(document, publicUrl, { post } = {}) {
+  const failedRecipients = [];
   const baseUrl = new URL(publicUrl);
   const timeToCompleteDays = document?.TimeToCompleteDays || 15;
   const ExpireDate = new Date(document.createdAt);
@@ -115,7 +114,7 @@ async function sendMail(document, publicUrl) {
     month: 'long',
     year: 'numeric',
   });
-  let signerMail = document.Placeholders?.filter(x => x?.Role !== 'prefill');
+  const signerMail = batchMailRecipients(document);
   const senderName = document?.SenderName || document.ExtUserPtr.Name;
   const senderEmail = document?.SenderMail || document.ExtUserPtr.Email;
   const from =
@@ -123,14 +122,9 @@ async function sendMail(document, publicUrl) {
       ? document.ExtUserPtr.Name
       : senderEmail;
 
-  if (document.SendinOrder) {
-    signerMail = signerMail.slice();
-    signerMail.splice(1);
-  }
   for (let i = 0; i < signerMail.length; i++) {
+    let recipient = signerMail[i]?.email;
     try {
-      let url = `${serverUrl}/functions/sendmailv3`;
-      const headers = sendmailHeaders;
       const objectId = signerMail[i]?.signerObjId;
       const hostUrl = baseUrl.origin;
       let encodeBase64;
@@ -177,23 +171,40 @@ async function sendMail(document, publicUrl) {
         localExpireDate: localExpireDate,
         signingUrl: signPdf,
       };
+      recipient = existSigner?.Email || signerMail[i].email;
       let params = {
         extUserId: document.ExtUserPtr.objectId,
         documentId: document.objectId,
-        recipient: existSigner?.Email || signerMail[i].email,
+        recipient,
         subject: replaceVar?.subject ? replaceVar?.subject : mailTemplate(mailparam).subject,
         from: from,
         replyto: senderEmail || '',
         html: replaceVar?.body ? replaceVar?.body : mailTemplate(mailparam).body,
       };
-      await axios.post(url, params, { headers: headers });
+      await postSendmailv3(params, { post });
     } catch (error) {
-      console.log('batchdoc sendmail error: ', error);
+      // Never the whole axios error: its config carries X-Parse-Master-Key.
+      failedRecipients.push({ recipient, ...errorSummary(error) });
     }
   }
+  if (failedRecipients.length > 0) {
+    alertMailFailure('bulk send signing email failed', {
+      documentId: document?.objectId,
+      failed: failedRecipients,
+    });
+  }
+  return { sent: signerMail.length - failedRecipients.length, failed: failedRecipients };
 }
 
-async function startBulkSendInBackground(userId, Documents, Ip, parseConfig, type, publicUrl) {
+async function startBulkSendInBackground(
+  userId,
+  Documents,
+  Ip,
+  parseConfig,
+  type,
+  publicUrl,
+  consumeQuota = makeMailQuota()
+) {
   const BATCH_LIMIT = 50; // Parse batch limit (safe)
   const DOC_MAIL_CONCURRENCY = 5;
 
@@ -298,6 +309,10 @@ async function startBulkSendInBackground(userId, Documents, Ip, parseConfig, typ
   });
 
   if (requests?.length > 0) {
+    // The signing emails below go through sendmailv3 with the master key, so the
+    // signed-in caller's daily recipient limit is applied here, before the document
+    // is created.
+    await consumeQuota(userId, batchMailRecipients(Documents?.[0]).length);
     const newrequests = [requests?.[0]];
     const response = await axios.post('batch', { requests: newrequests }, parseConfig);
     // Handle the batch query response
@@ -311,7 +326,7 @@ async function startBulkSendInBackground(userId, Documents, Ip, parseConfig, typ
       };
       deductcount(response.data.length, resExt.id);
       console.log('here');
-      sendMail(updateDocuments, publicUrl); //sessionToken
+      sendBatchMail(updateDocuments, publicUrl); //sessionToken
       return { total: 1, created: 1, failed: 0 };
     }
   }
@@ -348,7 +363,8 @@ export default async function createBatchDocs(request) {
     // quicksend
     return await startBulkSendInBackground(userId, Documents, Ip, parseConfig, type, publicUrl);
   } catch (err) {
-    console.log('createbatchdoc error: ', err);
+    // Never the whole error: an axios error carries the session token header.
+    console.log('createbatchdoc error: ', errorSummary(err));
     const code = err?.code || 400;
     const msg = err?.message || 'Something went wrong.';
     throw new Parse.Error(code, msg);

@@ -4,6 +4,7 @@ import axios from 'axios';
 import { updateMailCount } from '../../Utils.js';
 import { relayMail } from '../../leaselynxRelay.js';
 import { spamReportFooter } from './sendMailv3.js';
+import { alertMailFailure } from './sendmailClient.js';
 
 function safeUnlink(filePath, label = 'file') {
   if (fs.existsSync(filePath)) {
@@ -15,45 +16,51 @@ function safeUnlink(filePath, label = 'file') {
   }
 }
 
-// `downloadToFile` writes the document at `url` to `filePath`; resolves 'success' or 'error'.
-function downloadToFile(url, filePath) {
-  const Pdf = fs.createWriteStream(filePath);
+// `downloadToFile` writes the document at `url` to `filePath`. Resolves { ok: true } only
+// for an HTTP 200 whose body has been completely written (the file stream's 'finish');
+// otherwise { ok: false, reason }.
+export function downloadToFile(url, filePath) {
   return new Promise(resolve => {
+    let settled = false;
+    const done = result => {
+      if (!settled) {
+        settled = true;
+        resolve(result);
+      }
+    };
+    const onResponse = (statusCode, body) => {
+      if (statusCode !== 200) {
+        body?.resume?.();
+        return done({ ok: false, reason: `HTTP ${statusCode}` });
+      }
+      const file = fs.createWriteStream(filePath);
+      file.on('finish', () => done({ ok: true }));
+      file.on('error', e => done({ ok: false, reason: e.message }));
+      body.on('error', e => done({ ok: false, reason: e.message }));
+      body.pipe(file);
+    };
     const isSecure = new URL(url)?.protocol === 'https:' && new URL(url)?.hostname !== 'localhost';
     if (isSecure) {
       https
-        .get(url, function (response) {
-          response.pipe(Pdf);
-          response.on('end', () => resolve('success'));
-        })
-        .on('error', e => {
-          console.error(`error: ${e.message}`);
-          resolve('error');
-        });
+        .get(url, response => onResponse(response.statusCode, response))
+        .on('error', e => done({ ok: false, reason: e.message }));
     } else {
       const httpsAgent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL validation
       const newlocalUrl = url.replace('https://localhost:3001/api', 'http://localhost:8080');
       axios
-        .get(newlocalUrl, { responseType: 'stream', httpsAgent: httpsAgent })
-        .then(response => {
-          response.data.pipe(Pdf);
-          Pdf.on('finish', () => resolve('success'));
-          Pdf.on('error', () => resolve('error'));
-        })
-        .catch(e => {
-          console.log('error in localurl', e.message);
-          resolve('error');
-        });
+        .get(newlocalUrl, { responseType: 'stream', httpsAgent: httpsAgent, validateStatus: () => true })
+        .then(response => onResponse(response.status, response.data))
+        .catch(e => done({ ok: false, reason: e.message }));
     }
   });
 }
 
-function readAfterFlush(filePath) {
-  return new Promise(resolve => setTimeout(() => resolve(fs.readFileSync(filePath)), 100));
-}
+const isPdf = buffer => buffer.length >= 4 && buffer.subarray(0, 4).toString('latin1') === '%PDF';
 
 // `sendMailWithAttachment` sends the completion and forwarded-document mail, with the
-// signed PDF and its certificate attached, through the LeaseLynx relay.
+// signed PDF and its certificate attached, through the LeaseLynx relay. Resolves
+// { status: 'success' } or { status: 'error' }; it never sends a mail without a
+// complete, real PDF when a url is given.
 export default async function sendMailWithAttachment(params, { relay = relayMail } = {}) {
   const extUserId = params?.extUserId || '';
   const message = {
@@ -74,11 +81,21 @@ export default async function sendMailWithAttachment(params, { relay = relayMail
   try {
     if (params.url) {
       const downloaded = await downloadToFile(params.url, testPdf);
-      if (downloaded !== 'success') {
-        // Fail closed: never send a completion mail with a missing or partial document.
+      if (!downloaded.ok) {
+        alertMailFailure('document download failed; no email sent', {
+          documentId: message.documentId,
+          reason: downloaded.reason,
+        });
         return { status: 'error' };
       }
-      const PdfBuffer = await readAfterFlush(testPdf);
+      const PdfBuffer = fs.readFileSync(testPdf);
+      if (!isPdf(PdfBuffer)) {
+        alertMailFailure('downloaded document is not a PDF; no email sent', {
+          documentId: message.documentId,
+          bytes: PdfBuffer.length,
+        });
+        return { status: 'error' };
+      }
       const pdfName = params.pdfName && `${params.pdfName}.pdf`;
       message.attachments.push({
         filename: params.filename || pdfName || 'exported.pdf',
@@ -94,7 +111,7 @@ export default async function sendMailWithAttachment(params, { relay = relayMail
             content: certificateBuffer,
           });
         } catch (err) {
-          console.log('sendMailWithAttachment read certificate error', err);
+          console.log('sendMailWithAttachment read certificate error', err?.message);
         }
       }
     }

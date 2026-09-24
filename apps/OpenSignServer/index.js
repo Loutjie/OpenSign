@@ -11,7 +11,7 @@ import FSFilesAdapter from '@parse/fs-files-adapter';
 import { app as customRoute } from './cloud/customRoute/customApp.js';
 import { exec } from 'child_process';
 import { appName, cloudServerUrl, serverAppId, useLocal } from './Utils.js';
-import { relayMail } from './leaselynxRelay.js';
+import { checkMailRelayConfig, makeApiCallback } from './leaselynxRelay.js';
 import { SSOAuth } from './auth/authadapter.js';
 import runDbMigrations from './migrationdb/index.js';
 import { validateSignedLocalUrl } from './cloud/parsefunction/getSignedUrl.js';
@@ -55,7 +55,9 @@ if (useLocal !== 'true') {
 }
 
 // Parse's own mail (password reset, email verification) goes through the LeaseLynx relay,
-// like every other OpenSign email. Without the relay URL there is no mail adapter at all.
+// like every other OpenSign email. Without the relay URL there is no mail adapter at all,
+// and in production that is an ALERT at startup.
+checkMailRelayConfig();
 const isMailAdapter = !!process.env.LEASELYNX_MAIL_RELAY_URL;
 export const config = {
   databaseURI:
@@ -108,18 +110,9 @@ export const config = {
                 htmlPath: './files/verification_email.html',
               },
             },
-            // apiCallback receives only { payload, locale } (parse-server-api-mail-adapter
-            // 5.0.5), not the template name, so the kind comes from the template's subject.
-            apiCallback: async ({ payload }) =>
-              relayMail({
-                kind: payload.subject?.toLowerCase().includes('password')
-                  ? 'password_reset'
-                  : 'email_verification',
-                to: payload.to,
-                subject: payload.subject,
-                html: payload.html,
-                text: payload.text,
-              }),
+            // Relays through LeaseLynx and never rejects (Parse does not await it); see
+            // makeApiCallback in leaselynxRelay.js.
+            apiCallback: makeApiCallback(),
           },
         },
       }

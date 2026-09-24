@@ -902,7 +902,13 @@ function PdfRequestFiles(
                         };
                         await axios.post(url, params, { headers: headers });
                       } catch (error) {
-                        console.log("error", error);
+                        // The signature is saved; say that the next signer was not
+                        // emailed instead of carrying on as if they were.
+                        console.log(
+                          "next signer mail failed",
+                          error?.response?.data?.error || error?.message
+                        );
+                        alert(t("mail-not-delivered"));
                       }
                     }
                   }

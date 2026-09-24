@@ -36,7 +36,6 @@ describe('mail routing (static)', () => {
       'cloud/parsefunction/sendMailWithAttachment.js',
       'cloud/parsefunction/SendMailOTPv1.js',
       'cloud/parsefunction/sendDeleteUserMail.js',
-      'index.js',
     ]) {
       expect(read(f)).withContext(f).toMatch(/import \{[^}]*\brelayMail\b[^}]*\} from '[./]+\/leaselynxRelay\.js'/);
     }
@@ -58,26 +57,11 @@ describe('mail routing (static)', () => {
     expect(read('Utils.js')).not.toMatch(/smtpenable|smtpsecure/);
   });
 
-  it('sends the master key on every server-side call to sendmailv3', () => {
+  // Every server-side sendmailv3 call goes through postSendmailv3, whose master-key
+  // header and documentId pass-through are tested by calling it (mailFailures.spec.js).
+  it('calls sendmailv3 over HTTP only from sendmailClient.js', () => {
     const callers = sources.filter(s => s.src.includes('/functions/sendmailv3'));
-    expect(callers.map(s => s.file).sort()).toEqual([
-      'cloud/customRoute/deleteAccount/deleteUtils.js',
-      'cloud/parsefunction/createBatchDocs.js',
-      'cloud/parsefunction/declinedocument.js',
-      'cloud/parsefunction/pdf/PDF.js',
-    ]);
-    for (const { file, src } of callers) {
-      expect(src).withContext(file).toContain("'X-Parse-Master-Key': ");
-      expect(src).withContext(file).not.toMatch(/headers = \{ 'Content-Type': 'application\/json', 'X-Parse-Application-Id': appId \}/);
-    }
-  });
-
-  it('passes documentId wherever the document is known', () => {
-    const pdf = read('cloud/parsefunction/pdf/PDF.js');
-    expect(pdf.match(/documentId: doc\.objectId/g)?.length).toBe(2);
-    expect(read('cloud/parsefunction/ForwardDoc.js')).toContain('documentId: docId');
-    expect(read('cloud/parsefunction/createBatchDocs.js')).toContain('documentId: document.objectId');
-    expect(read('cloud/parsefunction/declinedocument.js')).toContain('documentId: doc.objectId');
+    expect(callers.map(s => s.file)).toEqual(['cloud/parsefunction/sendmailClient.js']);
   });
 });
 
@@ -143,14 +127,7 @@ describe('sendmailv3', () => {
     expect(calls.length).toBe(0);
   });
 
-  it('fails closed with { status: "error" } when the relay throws, and counts nothing', async () => {
-    const { calls, relay } = recorder({ fail: true });
-    const counted = [];
-    const handler = makeSendmailv3({ relay, countMail: async id => counted.push(id) });
-    expect(await handler({ params, master: true, headers: {} })).toEqual({ status: 'error' });
-    expect(calls.length).toBe(1);
-    expect(counted).toEqual([]);
-  });
+  // A relay failure throws: mailFailures.spec.js (B1).
 });
 
 describe('sendMailWithAttachment', () => {
@@ -264,9 +241,8 @@ describe('SendOTPMailV1', () => {
     expect(unknown.stored.length).toBe(0);
   });
 
-  it('throws and stores no code when the relay fails', async () => {
-    const { stored, handler } = deps({ doc, fail: true });
+  it('throws when the relay fails (the code was stored first: mailFailures.spec.js, B7)', async () => {
+    const { handler } = deps({ doc, fail: true });
     await expectAsync(handler({ params: { email: 'signer@x.test', docId: 'doc1' } })).toBeRejected();
-    expect(stored.length).toBe(0);
   });
 });

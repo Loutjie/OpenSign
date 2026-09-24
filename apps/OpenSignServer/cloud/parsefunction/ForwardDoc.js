@@ -49,8 +49,8 @@ export function makeForwardDoc({
         const replyTo = _docRes?.SenderMail || _docRes?.ExtUserPtr?.Email;
         const senderName = _docRes?.SenderName || _docRes?.ExtUserPtr?.Name;
 
+        const failed = [];
         try {
-          let mailRes;
           for (let i = 0; i < recipients.length; i++) {
             let params = {
               extUserId: extUserId,
@@ -81,10 +81,9 @@ export function makeForwardDoc({
                 `</div>` +
                 `</div></div></div></body></html>`,
             };
-            mailRes = await send(params);
-            // console.log('mailRes', mailRes);
+            const mailRes = await send(params);
+            if (mailRes?.status !== 'success') failed.push(recipients[i]);
           }
-          return mailRes;
         } catch (error) {
           const msg =
             error?.response?.data?.error ||
@@ -93,6 +92,14 @@ export function makeForwardDoc({
             'Something went wrong.';
           throw new Parse.Error(400, msg);
         }
+        // Success only when every recipient was sent; otherwise name the ones that were not.
+        if (failed.length > 0) {
+          throw new Parse.Error(
+            Parse.Error.SCRIPT_FAILED,
+            `The document could not be emailed to: ${failed.join(', ')}`
+          );
+        }
+        return { status: 'success' };
       } else {
         throw new Parse.Error(Parse.Error.INVALID_QUERY, 'please provide parameters.');
       }
