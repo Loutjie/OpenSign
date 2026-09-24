@@ -186,21 +186,72 @@ describe('stored file signing (S3-mode env)', () => {
         Parse.Cloud.run('getsignedurl', { url: PATH_URL, docId: 'doesNotExist' })
       ).toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OBJECT_NOT_FOUND }));
     });
+
+    it("signs a template's own file and refuses a foreign key (templateId)", async () => {
+      const Template = Parse.Object.extend('contracts_Template');
+      const template = await new Template().save(
+        { URL: PATH_URL, Name: 'spec template' },
+        { useMasterKey: true }
+      );
+      const own = await Parse.Cloud.run('getsignedurl', { url: PATH_URL, templateId: template.id });
+      expect(new URL(own).searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+      await expectAsync(
+        Parse.Cloud.run('getsignedurl', {
+          url: `${ENDPOINT}/${BUCKET}/someone_elses.pdf`,
+          templateId: template.id,
+        })
+      ).toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN }));
+    });
   });
 
   describe('no JWT for bucket-backed files (S3 mode)', () => {
     // With the S3 adapter, Parse's /files route would serve any object through the
     // server's own HMAC identity; a JWT for it bypasses the private bucket.
+    const forbidden = jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN });
+
     it('fileupload and getsignedurl refuse to mint a local-file token when useLocal !== "true"', async () => {
       const local = `${SERVER}/files/opensign/${KEY}`;
-      await expectAsync(Parse.Cloud.run('fileupload', { url: local })).toBeRejected();
-      await expectAsync(Parse.Cloud.run('getsignedurl', { url: local, docId: 'x' })).toBeRejected();
+      await expectAsync(Parse.Cloud.run('fileupload', { url: local })).toBeRejectedWith(forbidden);
+      await expectAsync(
+        Parse.Cloud.run('getsignedurl', { url: local, docId: 'x' })
+      ).toBeRejectedWith(forbidden);
     });
 
-    it('getPresignedUrl refuses a local Parse file in S3 mode', async () => {
-      await expectAsync(getPresignedUrl(`${SERVER}/files/opensign/${KEY}`)).toBeRejectedWith(
-        jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN })
-      );
+    it('fileupload returns a bucket URL unchanged, with no token (a stale client sends them)', async () => {
+      expect(await Parse.Cloud.run('fileupload', { url: PATH_URL })).toEqual({ url: PATH_URL });
+    });
+
+    it('getPresignedUrl passes a legacy local Parse URL through unchanged in S3 mode, minting nothing', async () => {
+      // afterFind hooks sign every stored URL; one legacy value must not fail the lookup.
+      const local = `${SERVER}/files/opensign/${KEY}`;
+      const out = await getPresignedUrl(local);
+      expect(out).toBe(local);
+      expect(out).not.toContain('token=');
+    });
+
+    it('the /files/ route refuses a read in any letter case in S3 mode', async () => {
+      // Express and Parse's FilesRouter match routes case-insensitively, so /Files/
+      // reaches the same handler. A real stored file makes a bypass visible as a 200.
+      process.env.USE_LOCAL = 'true';
+      const file = await new Parse.File('case.pdf', [37, 80, 68, 70]).save({ useMasterKey: true });
+      process.env.USE_LOCAL = 'false';
+      try {
+        for (const segment of ['files', 'Files', 'FILES']) {
+          const route = `http://localhost:30001/test/${segment}/test/${file.name()}`;
+          for (const method of ['GET', 'HEAD']) {
+            expect((await fetch(`${route}?token=anything`, { method })).status)
+              .withContext(`${method} ${segment}`)
+              .toBe(403);
+          }
+        }
+        // Local mode keeps its token check in any letter case too.
+        process.env.USE_LOCAL = 'true';
+        const upper = `http://localhost:30001/test/Files/test/${file.name()}`;
+        expect((await fetch(upper)).status).toBe(400);
+      } finally {
+        process.env.USE_LOCAL = 'true';
+        await file.destroy({ useMasterKey: true });
+      }
     });
 
     it('the /files/ route answers 403 to a read in S3 mode, and keeps token checks in local mode', async () => {

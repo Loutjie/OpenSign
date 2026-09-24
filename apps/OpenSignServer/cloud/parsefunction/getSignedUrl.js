@@ -52,9 +52,13 @@ const isOurBucketUrl = url =>
 
 // `getPresignedUrl` returns a readable URL for a stored file: a JWT-carrying URL for a
 // local Parse file (local storage only), a fresh signature for an object in our bucket,
-// and any other URL (data: URLs, external images) unchanged.
+// and any other URL (data: URLs, external images) unchanged. In S3 mode a legacy local
+// Parse URL passes through unchanged: it mints nothing (the /files/ route answers 403),
+// and the afterFind hooks that call this must not fail a lookup over one old value.
 export default async function getPresignedUrl(url) {
-  if (isLocalParseFileUrl(url, process.env.SERVER_URL)) return presignedlocalUrl(url);
+  if (isLocalParseFileUrl(url, process.env.SERVER_URL)) {
+    return isLocalStorage() ? presignedlocalUrl(url) : url;
+  }
   if (!isOurBucketUrl(url)) return url;
   const command = new GetObjectCommand({
     Bucket: process.env.DO_SPACE,
