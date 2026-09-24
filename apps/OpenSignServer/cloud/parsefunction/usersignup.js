@@ -4,10 +4,19 @@ const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
 const APPID = serverAppId;
 const masterKEY = process.env.MASTER_KEY;
 
-async function saveUser(userDetails) {
+async function findUserByUsername(username) {
   const userQuery = new Parse.Query(Parse.User);
-  userQuery.equalTo('username', userDetails.email);
-  const userRes = await userQuery.first({ useMasterKey: true });
+  userQuery.equalTo('username', username);
+  return userQuery.first({ useMasterKey: true });
+}
+
+// The _User beforeSave trigger (accessGuards.js) refuses a new user without the master
+// key, so the signUp here must carry it.
+export async function saveUser(
+  userDetails,
+  { findUser = findUserByUsername, newUser = () => new Parse.User() } = {}
+) {
+  const userRes = await findUser(userDetails.email);
 
   if (userRes) {
     const url = `${serverUrl}/loginAs`;
@@ -27,7 +36,7 @@ async function saveUser(userDetails) {
     // console.log("login ", login);
     return { id: login.objectId, sessionToken: login.sessionToken };
   } else {
-    const user = new Parse.User();
+    const user = newUser();
     user.set('username', userDetails.email);
     user.set('password', userDetails.password);
     user.set('email', userDetails?.email?.toLowerCase()?.replace(/\s/g, ''));
@@ -36,14 +45,27 @@ async function saveUser(userDetails) {
     }
     user.set('name', userDetails.name);
 
-    const res = await user.signUp();
+    const res = await user.signUp(null, { useMasterKey: true });
     // console.log("res ", res);
     return { id: res.id, sessionToken: res.getSessionToken() };
   }
 }
-export default async function usersignup(request) {
-  const userDetails = request.params.userDetails;
 
+// Only the master key may create accounts. Anyone else could sign up, get a session
+// and use it to send mail through sendmailv3; or, for an existing user without a
+// contracts_Users row, get that user's session from the loginAs branch of saveUser.
+export function makeUsersignup({ createAccount = createAccountAndProfile } = {}) {
+  return async function usersignup(request) {
+    if (!request?.master) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Sign-up is closed.');
+    }
+    return createAccount(request.params.userDetails);
+  };
+}
+
+export default makeUsersignup();
+
+async function createAccountAndProfile(userDetails) {
   try {
     const user = await saveUser(userDetails);
     const extClass = userDetails.role.split('_')[0];

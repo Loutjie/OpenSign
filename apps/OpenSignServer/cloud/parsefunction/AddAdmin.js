@@ -59,10 +59,23 @@ async function addTeamAndOrg(extUser) {
   }
 }
 
-async function saveUser(userDetails) {
+const normalise = email => email?.toLowerCase()?.replace(/\s/g, '');
+
+async function findUserByEmail(email) {
   const userQuery = new Parse.Query(Parse.User);
-  userQuery.equalTo('username', userDetails.email?.toLowerCase()?.replace(/\s/g, ''));
-  const userRes = await userQuery.first({ useMasterKey: true });
+  userQuery.equalTo('username', normalise(email));
+  return userQuery.first({ useMasterKey: true });
+}
+
+async function adminExists() {
+  const query = new Parse.Query('contracts_Users');
+  query.equalTo('UserRole', 'contracts_Admin');
+  query.notEqualTo('IsDisabled', true);
+  return !!(await query.first({ useMasterKey: true }));
+}
+
+async function saveUser(userDetails) {
+  const userRes = await findUserByEmail(userDetails.email);
 
   if (userRes) {
     const url = `${serverUrl}/loginAs`;
@@ -91,13 +104,39 @@ async function saveUser(userDetails) {
     }
     user.set('name', userDetails.name);
 
-    const res = await user.signUp();
+    // Master key: the _User beforeSave trigger (accessGuards.js) refuses anything else.
+    const res = await user.signUp(null, { useMasterKey: true });
     // console.log("res ", res);
     return { id: res.id, sessionToken: res.getSessionToken() };
   }
 }
-export default async function AddAdmin(request) {
-  const userDetails = request.params.userDetails;
+
+// Without the master key, addadmin is only the first-run setup page (pages/AddAdmin.jsx):
+// allowed while no admin exists, and only for a new account. Otherwise anyone could name
+// an existing user (e.g. a LeaseLynx landlord, whose contracts_Users row links through
+// UserPtr, not UserId) and receive that user's session from the loginAs branch of saveUser.
+export function makeAddAdmin({
+  hasAdmin = adminExists,
+  findUser = findUserByEmail,
+  addAdmin = createAdmin,
+} = {}) {
+  return async function AddAdmin(request) {
+    const userDetails = request.params.userDetails;
+    if (!request?.master) {
+      if (await hasAdmin()) {
+        throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'An admin already exists.');
+      }
+      if (await findUser(userDetails?.email)) {
+        throw new Parse.Error(Parse.Error.USERNAME_TAKEN, 'Account already exists for this username.');
+      }
+    }
+    return addAdmin(userDetails);
+  };
+}
+
+export default makeAddAdmin();
+
+async function createAdmin(userDetails) {
   const user = await saveUser(userDetails);
 
   try {

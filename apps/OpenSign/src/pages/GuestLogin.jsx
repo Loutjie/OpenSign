@@ -210,6 +210,8 @@ function GuestLogin() {
         }
       } catch (error) {
         console.log("err ", error);
+        // e.g. too many wrong codes: the server withdraws the code for 15 minutes.
+        alert(error?.response?.data?.error || t("something-went-wrong-mssg"));
         setLoading(false);
       }
     } else {

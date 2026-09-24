@@ -63,6 +63,11 @@ import getSignature from './parsefunction/getSignature.js';
 import updateEmailTemplates from './parsefunction/updateEmailTemplates.js';
 import triggerEvent from './parsefunction/triggerEvent.js';
 import setWidgetPreferences from './parsefunction/setWidgetPreferences.js';
+import { registerAccessGuards } from './parsefunction/accessGuards.js';
+
+// No self-signup (only the master key creates a _User), and the OTP and mail-limit
+// classes are master-key only.
+registerAccessGuards(Parse.Cloud);
 
 // This afterSave function triggers after an object is added or updated in the specified class, allowing for post-processing logic.
 Parse.Cloud.afterSave('contracts_Document', DocumentAftersave);

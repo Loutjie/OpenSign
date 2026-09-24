@@ -18,7 +18,8 @@ import {
   signatureTypes,
   createDocument,
   defaultMailBody,
-  defaultMailSubject
+  defaultMailSubject,
+  sendmailv3Headers
 } from "../../constant/Utils";
 import BulkSendUi from "../../components/bulksend/BulkSendUi";
 import Loader from "../../primitives/Loader";
@@ -694,12 +695,12 @@ const TemplatesReport = (props) => {
     e.preventDefault();
     setActLoader({ [user?.Id]: true });
     const url = `${localStorage.getItem("baseUrl")}functions/sendmailv3`;
-    const headers = {
-      "Content-Type": "application/json",
-      "X-Parse-Application-Id": localStorage.getItem("parseAppId"),
-      sessionToken: localStorage.getItem("accesstoken")
-    };
+    const headers = sendmailv3Headers();
+    // No report action opens this for a template (ReportJson has no "resend" for
+    // 6TeaPr321t). If one did, `doc` is a template, not a contracts_Document, and
+    // sendmailv3 refuses it.
     let params = {
+      documentId: doc?.objectId,
       replyto:
         doc?.ExtUserPtr?.Email ||
         "",

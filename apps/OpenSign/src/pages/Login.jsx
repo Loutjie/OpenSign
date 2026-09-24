@@ -298,7 +298,16 @@ function Login() {
             timezone: usertimezone
           }
         };
-        const userSignUp = await Parse.Cloud.run("usersignup", params);
+        // usersignup is master-key only now (no self-signup): the server refuses this,
+        // so say so instead of leaving the loader spinning.
+        let userSignUp;
+        try {
+          userSignUp = await Parse.Cloud.run("usersignup", params);
+        } catch (err) {
+          setThirdpartyLoader(false);
+          alert(err?.message || t("something-went-wrong-mssg"));
+          return;
+        }
         if (userSignUp && userSignUp.sessionToken) {
           const LocalUserDetails = {
             name: userInformation.name,

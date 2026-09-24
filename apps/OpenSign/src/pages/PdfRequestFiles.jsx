@@ -51,7 +51,8 @@ import {
   widgetDataValue,
   getOriginalWH,
   handleCheckResponse,
-  convertJpegToPng
+  convertJpegToPng,
+  sendmailv3Headers
 } from "../constant/Utils";
 import Header from "../components/pdf/PdfHeader";
 import RenderPdf from "../components/pdf/RenderPdf";
@@ -825,12 +826,7 @@ function PdfRequestFiles(
                       const documentName = pdfDetails?.[0].Name;
                       try {
                         let url = `${localStorage.getItem("baseUrl")}functions/sendmailv3`;
-                        const headers = {
-                          "Content-Type": "application/json",
-                          "X-Parse-Application-Id":
-                            localStorage.getItem("parseAppId"),
-                          sessionToken: localStorage.getItem("accesstoken")
-                        };
+                        const headers = sendmailv3Headers();
                         const objectId = user?.objectId;
                         const hostUrl = window.location.origin;
                         //encode this url value `${pdfDetails?.[0].objectId}/${user.Email}/${objectId}` to base64 using `btoa` function
@@ -890,6 +886,7 @@ function PdfRequestFiles(
                           signingUrl: signPdf
                         };
                         let params = {
+                          documentId: docId,
                           replyto: senderEmail || "",
                           extUserId: extUserId,
                           recipient: user.Email,

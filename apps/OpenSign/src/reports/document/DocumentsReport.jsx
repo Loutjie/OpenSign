@@ -22,7 +22,8 @@ import {
   createDocument,
   getSignerEmail,
   defaultMailBody,
-  defaultMailSubject
+  defaultMailSubject,
+  sendmailv3Headers
 } from "../../constant/Utils";
 import BulkSendUi from "../../components/bulksend/BulkSendUi";
 import Loader from "../../primitives/Loader";
@@ -669,12 +670,9 @@ const DocumentsReport = (props) => {
     e.preventDefault();
     setActLoader({ [user?.Id]: true });
     const url = `${localStorage.getItem("baseUrl")}functions/sendmailv3`;
-    const headers = {
-      "Content-Type": "application/json",
-      "X-Parse-Application-Id": localStorage.getItem("parseAppId"),
-      sessionToken: localStorage.getItem("accesstoken")
-    };
+    const headers = sendmailv3Headers();
     let params = {
+      documentId: doc?.objectId,
       replyto: doc?.SenderMail || doc?.ExtUserPtr?.Email || "",
       extUserId: doc?.ExtUserPtr?.objectId,
       recipient: userDetails?.Email,

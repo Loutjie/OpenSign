@@ -42,10 +42,6 @@ describe('mail routing (static)', () => {
     }
   });
 
-  it('guards sendmailv3 with req.master || req.user', () => {
-    expect(read('cloud/parsefunction/sendMailv3.js')).toContain('req.master || req.user');
-  });
-
   it('names the kind explicitly for OTP and delete-request mail', () => {
     expect(read('cloud/parsefunction/SendMailOTPv1.js')).toContain("kind: 'otp'");
     expect(read('cloud/parsefunction/sendDeleteUserMail.js')).toContain("kind: 'delete_request'");
@@ -108,11 +104,12 @@ describe('sendmailv3', () => {
     text: 'sign',
   };
 
-  it('relays once as a document with the passed documentId for a signed-in user', async () => {
+  // The checks for callers without the master key are in mailSecurity.spec.js.
+  it('relays once as a document with the passed documentId for a master-key caller', async () => {
     const { calls, relay } = recorder();
     const counted = [];
     const handler = makeSendmailv3({ relay, countMail: async id => counted.push(id) });
-    const res = await handler({ params, user: { id: 'u1' }, headers: {} });
+    const res = await handler({ params, master: true, headers: {} });
     expect(res).toEqual({ status: 'success' });
     expect(calls.length).toBe(1);
     expect(calls[0]).toEqual(jasmine.objectContaining({
@@ -122,13 +119,6 @@ describe('sendmailv3', () => {
     expect(calls[0].html.startsWith('<p>sign</p>')).toBe(true);
     expect(calls[0].html).toContain('file a complaint with LeaseLynx');
     expect(counted).toEqual(['ext1']);
-  });
-
-  it('relays for a master-key call', async () => {
-    const { calls, relay } = recorder();
-    const handler = makeSendmailv3({ relay, countMail: async () => {} });
-    expect(await handler({ params, master: true, headers: {} })).toEqual({ status: 'success' });
-    expect(calls.length).toBe(1);
   });
 
   it('sends null documentId when none is passed', async () => {
@@ -153,26 +143,11 @@ describe('sendmailv3', () => {
     expect(calls.length).toBe(0);
   });
 
-  it("accepts OpenSign UI's custom sessionToken header only when it resolves to a user", async () => {
-    const { calls, relay } = recorder();
-    const seen = [];
-    const sessionUser = async token => {
-      seen.push(token);
-      return token === 'r:good' ? { id: 'u1' } : null;
-    };
-    const handler = makeSendmailv3({ relay, countMail: async () => {}, sessionUser });
-    expect(await handler({ params, headers: { sessiontoken: 'r:good' } })).toEqual({ status: 'success' });
-    await expectAsync(handler({ params, headers: { sessiontoken: 'r:bad' } }))
-      .toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN }));
-    expect(seen).toEqual(['r:good', 'r:bad']);
-    expect(calls.length).toBe(1);
-  });
-
   it('fails closed with { status: "error" } when the relay throws, and counts nothing', async () => {
     const { calls, relay } = recorder({ fail: true });
     const counted = [];
     const handler = makeSendmailv3({ relay, countMail: async id => counted.push(id) });
-    expect(await handler({ params, user: { id: 'u1' }, headers: {} })).toEqual({ status: 'error' });
+    expect(await handler({ params, master: true, headers: {} })).toEqual({ status: 'error' });
     expect(calls.length).toBe(1);
     expect(counted).toEqual([]);
   });

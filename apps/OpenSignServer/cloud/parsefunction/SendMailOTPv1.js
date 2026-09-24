@@ -25,13 +25,17 @@ async function storeOtp(email, code, TenantId) {
   const tempOtp = new Parse.Query('defaultdata_Otp');
   tempOtp.equalTo('Email', email);
   const resultOTP = await tempOtp.first({ useMasterKey: true });
+  // A new code starts a new count of wrong attempts (AuthLoginAsMail); an active lock
+  // (LockedUntil) is left in place.
   if (resultOTP !== undefined) {
     resultOTP.set('OTP', code);
+    resultOTP.set('FailedAttempts', 0);
     await resultOTP.save(null, { useMasterKey: true });
   } else {
     const otpClass = Parse.Object.extend('defaultdata_Otp');
     const newOtpQuery = new otpClass();
     newOtpQuery.set('OTP', code);
+    newOtpQuery.set('FailedAttempts', 0);
     newOtpQuery.set('Email', email);
     newOtpQuery.set('TenantId', TenantId);
     await newOtpQuery.save(null, { useMasterKey: true });

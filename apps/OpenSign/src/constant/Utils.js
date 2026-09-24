@@ -3917,6 +3917,18 @@ export function getFileAsArrayBuffer(file) {
   });
 }
 
+// Headers for a sendmailv3 call from the UI. The session goes in the standard
+// X-Parse-Session-Token header, which Parse validates and turns into req.user; the
+// server also requires the call to name the document (documentId) it is about.
+export const sendmailv3Headers = () => {
+  const sessionToken = localStorage.getItem("accesstoken");
+  return {
+    "Content-Type": "application/json",
+    "X-Parse-Application-Id": localStorage.getItem("parseAppId"),
+    ...(sessionToken ? { "X-Parse-Session-Token": sessionToken } : {})
+  };
+};
+
 export const sendEmailToSigners = async (
   pdfDetails,
   signersdata,
@@ -3927,6 +3939,7 @@ export const sendEmailToSigners = async (
   let htmlReqBody;
   const owner = pdfDetails?.[0]?.ExtUserPtr;
   let sendMail;
+  let sendFailed = false;
   const getDocumentExpDate = pdfDetails?.[0]?.ExpiryDate?.iso;
   const getTemplateExpDate = new Date(pdfDetails[0]?.createdAt);
   getTemplateExpDate.setDate(
@@ -3952,11 +3965,7 @@ export const sendEmailToSigners = async (
   for (let i = 0; i < signerMail.length; i++) {
     try {
       let url = `${localStorage.getItem("baseUrl")}functions/sendmailv3`;
-      const headers = {
-        "Content-Type": "application/json",
-        "X-Parse-Application-Id": localStorage.getItem("parseAppId"),
-        sessionToken: localStorage.getItem("accesstoken")
-      };
+      const headers = sendmailv3Headers();
       const objectId = signerMail[i].objectId;
       const hostUrl = window.location.origin;
       //encode this url value `${pdfDetails?.[0].objectId}/${signerMail[i].Email}/${objectId}` to base64 using `btoa` function
@@ -4040,6 +4049,7 @@ export const sendEmailToSigners = async (
         signingUrl: signPdf
       };
       let params = {
+        documentId: pdfDetails?.[0]?.objectId,
         extUserId: owner?.objectId,
         recipient: signerMail[i].Email,
         subject: replaceVar?.subject
@@ -4052,10 +4062,12 @@ export const sendEmailToSigners = async (
 
       sendMail = await axios.post(url, params, { headers: headers });
     } catch (error) {
-      console.log("error", error);
+      console.log("error", error?.response?.data?.error || error?.message);
+      sendFailed = true;
     }
   }
-  if (sendMail?.data?.result?.status === "success") {
+  // One failed signer email fails the whole send, so the UI does not report success.
+  if (!sendFailed && sendMail?.data?.result?.status === "success") {
     const sessiontoken = localStorage.getItem("accesstoken");
     if (pdfDetails[0]?.objectId && sessiontoken) {
       try {
@@ -4090,7 +4102,7 @@ export const sendEmailToSigners = async (
     }
     return { status: "success" };
   } else {
-    return { status: sendMail?.data?.result?.status };
+    return { status: sendFailed ? "error" : sendMail?.data?.result?.status };
   }
 };
 /**
