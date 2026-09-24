@@ -36,6 +36,7 @@ import {
   onClickZoomIn,
   onClickZoomOut,
   fetchUrl,
+  getSignedUrl,
   signatureTypes,
   handleSignatureType,
   getTenantDetails,
@@ -1423,7 +1424,14 @@ function PdfRequestFiles(
       docName: name,
       isSigned: isCompleted
     });
-    await fetchUrl(url, docName);
+    try {
+      // pdfDetails was signed at page load; the signature may have lapsed.
+      const freshUrl = await getSignedUrl(url, pdfDetails?.[0]?.objectId);
+      await fetchUrl(freshUrl, docName);
+    } catch (err) {
+      console.log("err in getsignedurl", err);
+      alert(t("something-went-wrong-mssg"));
+    }
   };
   const handleDeclineMssg = () => {
     const user = pdfDetails[0]?.DeclineBy?.email;

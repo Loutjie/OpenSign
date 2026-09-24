@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import Confetti from "react-confetti"; // Import the confetti library
 import {
   getBase64FromUrl,
+  getSignedUrl,
   handleDownloadCertificate,
   handleDownloadPdf,
   handleToPrint,
@@ -43,9 +44,17 @@ const DocSuccessPage = () => {
         IsCompleted: completed,
       };
       setPdfDetails([details]);
-      const base64Pdf = await getBase64FromUrl(docUrl);
-      if (base64Pdf) {
-        setPdfBase64Url(base64Pdf);
+      try {
+        // docurl was signed when the signer finished; a reload can come after that
+        // signature lapsed, so re-sign it against its document first.
+        const freshUrl = await getSignedUrl(docUrl, docId);
+        const base64Pdf = await getBase64FromUrl(freshUrl);
+        if (base64Pdf) {
+          setPdfBase64Url(base64Pdf);
+        }
+      } catch (err) {
+        // No preloaded copy; the download button re-signs and alerts on failure.
+        console.error("err in getsignedurl", err);
       }
     }
   };

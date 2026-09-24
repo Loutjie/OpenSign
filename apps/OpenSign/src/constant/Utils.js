@@ -7,6 +7,7 @@ import { saveAs } from "file-saver";
 import printModule from "print-js";
 import fontkit from "@pdf-lib/fontkit";
 import { themeColor } from "./const";
+import { isLocalParseFileUrl } from "./storedFileUrl";
 import { format, toZonedTime } from "date-fns-tz";
 import i18n from "../i18n";
 import {
@@ -106,9 +107,11 @@ export const getUserCountry = async () => {
   }
 };
 
-// `getSecureUrl` is used to return local secure url if local files
+// `getSecureUrl` gives a just-uploaded local Parse file a JWT via `fileupload`. Anything
+// else (a bucket URL, already signed at upload for 900 s) is returned as is: in S3 mode
+// the server refuses to mint a token for a local Parse URL (#12).
 export const getSecureUrl = async (url) => {
-  const fileUrl = new URL(url)?.pathname?.includes("files");
+  const fileUrl = isLocalParseFileUrl(url, localStorage.getItem("baseUrl"));
   if (fileUrl) {
     try {
       const fileRes = await Parse.Cloud.run("fileupload", { url: url });
@@ -2941,10 +2944,12 @@ export const handleToPrint = async (event, setIsDownloading, pdfDetails) => {
     alert(i18n.t("something-went-wrong-mssg"));
   }
 };
-const downloadCertificate = async (certificate, isZip, asBlob) => {
+// `certificate` may have been signed when the page loaded; re-sign it against the
+// document that references it (its CertificateUrl) before fetching.
+const downloadCertificate = async (certificate, isZip, asBlob, docId) => {
   try {
     const appName = "LeaseLynx";
-    const certificateUrl = certificate;
+    const certificateUrl = await getSignedUrl(certificate, docId);
     if (isZip) {
       return certificateUrl;
     } else {
@@ -2979,7 +2984,12 @@ export const handleDownloadCertificate = async (
   };
 
   if (initialCertificateUrl) {
-    return await downloadCertificate(initialCertificateUrl, isZip);
+    return await downloadCertificate(
+      initialCertificateUrl,
+      isZip,
+      false,
+      docId
+    );
   } else {
     setIsDownloading("certificate");
     try {
@@ -2989,7 +2999,12 @@ export const handleDownloadCertificate = async (
       });
       const cert = docDetails?.data?.result?.CertificateUrl;
       if (cert) {
-        const certificateUrl = await downloadCertificate(cert, isZip);
+        const certificateUrl = await downloadCertificate(
+          cert,
+          isZip,
+          false,
+          docId
+        );
         setIsDownloading("");
         return certificateUrl;
       } else {
@@ -3004,7 +3019,8 @@ export const handleDownloadCertificate = async (
             const certificateUrl = await downloadCertificate(
               certificate,
               isZip,
-              true
+              true,
+              docId
             );
             setIsDownloading("");
             return certificateUrl;

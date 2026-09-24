@@ -7,6 +7,7 @@ import {
   embedWidgetsToDoc,
   randomId,
   getBase64FromUrl,
+  getSignedUrl,
   drawWidget
 } from "../constant/Utils";
 import { PDFDocument } from "pdf-lib";
@@ -132,7 +133,13 @@ export const handleCheckPrefillCreateDoc = async (
   prefillImg,
   userId
 ) => {
-  const pdfArrayBuffer = await convertPdfArrayBuffer(updatedPdfUrl);
+  // `pdfDetails` is the template (every caller passes the getTemplate result), and
+  // `updatedPdfUrl` is its URL, signed when the template was loaded or saved; the
+  // signature may have lapsed while the user filled the modals. Re-sign it against
+  // that template. createDocument still gets `updatedPdfUrl` as loaded, as before.
+  const templateId = pdfDetails?.[0]?.objectId;
+  const freshPdfUrl = await getSignedUrl(updatedPdfUrl, "", templateId);
+  const pdfArrayBuffer = await convertPdfArrayBuffer(freshPdfUrl);
   const prefillData = xyPosition.find((x) => x.Role === "prefill");
   if (prefillData) {
     const res = isValidPrefill(prefillData);
