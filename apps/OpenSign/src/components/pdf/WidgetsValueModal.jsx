@@ -1793,30 +1793,30 @@ function WidgetsValueModal(props) {
 
   //function too use on click on next/finish button then update modal UI according to current widgets
   const handleClickOnNext = async (isFinishDoc) => {
-    // When finishing, skip save/clear — all fields are already saved
-    if (!isFinishDoc) {
+    // Save the open widget before anything else, including on "Done" for the
+    // last widget: that is the only save for the value the signer just gave.
+    // Skipping it on finish left a sole signature empty and Finish refused.
+    if (
+      ["signature", "stamp", "image", "initials", drawWidget].includes(
+        currWidgetsDetails?.type
+      )
+    ) {
       if (
-        ["signature", "stamp", "image", "initials", drawWidget].includes(
-          currWidgetsDetails?.type
-        )
+        signature ||
+        image ||
+        myInitial ||
+        defaultSignImg ||
+        myStamp ||
+        typedSignature
       ) {
-        if (
-          signature ||
-          image ||
-          myInitial ||
-          defaultSignImg ||
-          myStamp ||
-          typedSignature
-        ) {
-          //function to save all type draw or image
-          handleSaveBtn();
-        } else {
-          clearWidgetResponse();
-        }
+        //function to save all type draw or image
+        handleSaveBtn();
+      } else {
+        clearWidgetResponse();
       }
-      if (isSave) {
-        handleclose();
-      }
+    }
+    if (isSave) {
+      handleclose();
     }
     //condition when there are no any details left for response and current widget is last widget then
     //on click on finish button embed all widget's details on pdf and finish document
@@ -2094,6 +2094,7 @@ function WidgetsValueModal(props) {
                       type="button"
                       className="op-btn op-btn-primary op-btn-sm"
                       onClick={() => handleClickOnNext(true)} // isFinishDoc
+                      disabled={handleDisable()}
                     >
                       {t("done")}
                     </button>
