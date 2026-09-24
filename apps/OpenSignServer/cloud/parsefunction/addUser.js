@@ -1,11 +1,44 @@
 import { createUserAccount } from './userAccount.js';
 
-export default async function addUser(request) {
-  const { phone, name, password, organization, team, tenantId, timezone, role } = request.params;
-  const email = request.params?.email?.toLowerCase()?.replace(/\s/g, '');
+// Roles that manage an organisation's users (as in resetPassword.js).
+export const USER_ADMIN_ROLES = Object.freeze(['contracts_Admin', 'contracts_OrgAdmin']);
+
+export async function callerUserRole(
+  user,
+  { query = () => new Parse.Query('contracts_Users') } = {}
+) {
+  const extUser = await query()
+    .equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: user.id })
+    .first({ useMasterKey: true });
+  return extUser?.get('UserRole');
+}
+
+// adduser makes a login with a chosen password (and, for an email that already has an
+// account, sets that account's password), so only an admin may call it. Otherwise any
+// signed-in user could mint logins, each with its own daily mail limit, or take over an
+// existing account.
+export async function assertUserAdmin(request, { callerRole = callerUserRole } = {}) {
   if (!request.user) {
     throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'Invalid session token.');
   }
+  const role = await callerRole(request.user);
+  if (!USER_ADMIN_ROLES.includes(role)) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Only an admin can add users.');
+  }
+}
+
+export function makeAddUser({ authorize = assertUserAdmin } = {}) {
+  return async function addUser(request) {
+    await authorize(request);
+    return addAuthorizedUser(request);
+  };
+}
+
+export default makeAddUser();
+
+async function addAuthorizedUser(request) {
+  const { phone, name, password, organization, team, tenantId, timezone, role } = request.params;
+  const email = request.params?.email?.toLowerCase()?.replace(/\s/g, '');
   const currentUser = { __type: 'Pointer', className: '_User', objectId: request.user.id };
   if (name && email && password && organization && team && role && tenantId) {
     try {

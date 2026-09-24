@@ -219,7 +219,7 @@ export default async function linkContactToDoc(req) {
                 }
               } else {
                 // create new user in _User class on the basis of details provide by user
-                const newUserRes = await createUserAccount({ name, email, phone, password: email });
+                const newUserRes = await createUserAccount({ name, email, phone });
                 const contact = {
                   UserId: { __type: 'Pointer', className: '_User', objectId: newUserRes.id },
                   Name: name,

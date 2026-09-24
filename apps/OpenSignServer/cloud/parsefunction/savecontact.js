@@ -40,7 +40,7 @@ export default async function savecontact(request) {
         });
       }
       try {
-        const user = await createUserAccount({ name, email, phone, password: email });
+        const user = await createUserAccount({ name, email, phone });
         if (user) {
           contactQuery.set('CreatedBy', currentUserPtr);
           contactQuery.set('UserId', user);

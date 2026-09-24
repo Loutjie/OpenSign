@@ -44,12 +44,10 @@ export default async function editContact(request) {
         objectId: tenantId,
       });
       try {
-        const normalisedEmail = email?.toLowerCase()?.replace(/\s/g, '');
         const user = await createUserAccount({
           name,
-          email: normalisedEmail,
+          email: email?.toLowerCase()?.replace(/\s/g, ''),
           phone,
-          password: normalisedEmail,
         });
         if (user) {
           contactQuery.set('CreatedBy', createdBy);

@@ -27,12 +27,7 @@ async function ContactbookAftersave(request) {
       const Email = object.get('Email');
       const Phone = object.get('Phone');
       try {
-        const user = await createUserAccount({
-          name: Name,
-          email: Email,
-          phone: Phone,
-          password: Email,
-        });
+        const user = await createUserAccount({ name: Name, email: Email, phone: Phone });
         if (user) {
           object.set('UserId', user);
           const acl = object.getACL() || new Parse.ACL();
