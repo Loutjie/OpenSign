@@ -158,6 +158,13 @@ async function main() {
   ParseSDK.initialize(APP_ID);
   ParseSDK.masterKey = MASTER_KEY;
   ParseSDK.serverURL = SERVER_URL;
+  // A wrong master key is not refused outright: Parse can serve the request as an ordinary
+  // client, which would hide the admins and fail every write. Reading a schema is master-only.
+  try {
+    await new ParseSDK.Schema('_User').get();
+  } catch (err) {
+    throw new Error(`could not confirm MASTER_KEY with ${SERVER_URL}: ${err?.message}`);
+  }
   const counts = await rotateContactPasswords({
     Parse: ParseSDK,
     verifyPassword: makeVerifyPassword({ serverUrl: SERVER_URL, appId: APP_ID }),
