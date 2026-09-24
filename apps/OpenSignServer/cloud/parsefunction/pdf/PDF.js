@@ -172,6 +172,7 @@ async function sendNotifyMail(doc, signUser, mailProvider, publicUrl) {
 
       const params = {
         extUserId: sender.objectId,
+        documentId: doc.objectId,
         from: TenantAppName,
         recipient: creatorEmail,
         subject: subject,
@@ -310,6 +311,7 @@ async function sendCompletedMail(obj) {
   });
   const params = {
     extUserId: sender.objectId,
+    documentId: doc.objectId,
     url: url,
     from: doc?.SenderName || TenantAppName,
     replyto: doc?.SenderMail || doc?.ExtUserPtr?.Email || '',

@@ -1,4 +1,5 @@
-import { appName, smtpenable } from '../../Utils.js';
+import { appName } from '../../Utils.js';
+import { relayMail } from '../../leaselynxRelay.js';
 
 export const errHtml = err => {
   return `<html><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8" /><title>Reset Password</title></head>
@@ -41,12 +42,13 @@ const sendDeleteUserMail = async req => {
 
     const serverUrl = process.env?.SERVER_URL?.replace(/\/app\/?$/, '/');
     const deleteUrl = `${serverUrl}delete-account/${userId}`;
-    const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
     // Render a simple HTML form. In production, consider using a templating engine.
 
-    await Parse.Cloud.sendEmail({
-      sender: app + ' <' + mailsender + '>',
-      recipient: username,
+    await relayMail({
+      kind: 'delete_request',
+      extUserId: result.id,
+      fromName: app,
+      to: username,
       subject: `Account Deletion Request for ${username} – ${app}`,
       text: `Account Deletion Request for ${username} – ${app}`,
       html: `<html>

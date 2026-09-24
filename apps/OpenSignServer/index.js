@@ -6,15 +6,12 @@ import { ParseServer } from 'parse-server';
 import path from 'path';
 const __dirname = path.resolve();
 import http from 'http';
-import formData from 'form-data';
-import Mailgun from 'mailgun.js';
-import { ApiPayloadConverter } from 'parse-server-api-mail-adapter';
 import S3Adapter from '@parse/s3-files-adapter';
 import FSFilesAdapter from '@parse/fs-files-adapter';
 import { app as customRoute } from './cloud/customRoute/customApp.js';
 import { exec } from 'child_process';
-import { createTransport } from 'nodemailer';
-import { appName, cloudServerUrl, serverAppId, smtpenable, smtpsecure, useLocal } from './Utils.js';
+import { appName, cloudServerUrl, serverAppId, useLocal } from './Utils.js';
+import { relayMail } from './leaselynxRelay.js';
 import { SSOAuth } from './auth/authadapter.js';
 import runDbMigrations from './migrationdb/index.js';
 import { validateSignedLocalUrl } from './cloud/parsefunction/getSignedUrl.js';
@@ -57,50 +54,9 @@ if (useLocal !== 'true') {
   });
 }
 
-let transporterMail;
-let mailgunClient;
-let mailgunDomain;
-let isMailAdapter = false;
-if (smtpenable) {
-  try {
-    let transporterConfig = {
-      host: process.env.SMTP_HOST,
-      port: process.env.SMTP_PORT || 465,
-      secure: smtpsecure,
-    };
-
-    // ✅ Add auth only if BOTH username & password exist
-    const smtpUser = process.env.SMTP_USERNAME;
-    const smtpPass = process.env.SMTP_PASS;
-
-    if (smtpUser && smtpPass) {
-      transporterConfig.auth = {
-        user: process.env.SMTP_USERNAME ? process.env.SMTP_USERNAME : process.env.SMTP_USER_EMAIL,
-        pass: smtpPass,
-      };
-    }
-    transporterMail = createTransport(transporterConfig);
-    await transporterMail.verify();
-    isMailAdapter = true;
-  } catch (err) {
-    isMailAdapter = false;
-    console.log(`Please provide valid SMTP credentials: ${err}`);
-  }
-} else if (process.env.MAILGUN_API_KEY) {
-  try {
-    const mailgun = new Mailgun(formData);
-    mailgunClient = mailgun.client({
-      username: 'api',
-      key: process.env.MAILGUN_API_KEY,
-    });
-    mailgunDomain = process.env.MAILGUN_DOMAIN;
-    isMailAdapter = true;
-  } catch (error) {
-    isMailAdapter = false;
-    console.log('Please provide valid Mailgun credentials');
-  }
-}
-const mailsender = smtpenable ? process.env.SMTP_USER_EMAIL : process.env.MAILGUN_SENDER;
+// Parse's own mail (password reset, email verification) goes through the LeaseLynx relay,
+// like every other OpenSign email. Without the relay URL there is no mail adapter at all.
+const isMailAdapter = !!process.env.LEASELYNX_MAIL_RELAY_URL;
 export const config = {
   databaseURI:
     process.env.DATABASE_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/dev',
@@ -133,8 +89,8 @@ export const config = {
         emailAdapter: {
           module: 'parse-server-api-mail-adapter',
           options: {
-            // The email address from which emails are sent.
-            sender: appName + ' <' + mailsender + '>',
+            // Display only: LeaseLynx sets the real From address.
+            sender: appName + ' <noreply@leaselynx.co.za>',
             // The email templates.
             templates: {
               // The template used by Parse Server to send an email for password
@@ -152,12 +108,18 @@ export const config = {
                 htmlPath: './files/verification_email.html',
               },
             },
-            apiCallback: async ({ payload, locale }) => {
-              if (mailgunClient) {
-                const mailgunPayload = ApiPayloadConverter.mailgun(payload);
-                await mailgunClient.messages.create(mailgunDomain, mailgunPayload);
-              } else if (transporterMail) await transporterMail.sendMail(payload);
-            },
+            // apiCallback receives only { payload, locale } (parse-server-api-mail-adapter
+            // 5.0.5), not the template name, so the kind comes from the template's subject.
+            apiCallback: async ({ payload }) =>
+              relayMail({
+                kind: payload.subject?.toLowerCase().includes('password')
+                  ? 'password_reset'
+                  : 'email_verification',
+                to: payload.to,
+                subject: payload.subject,
+                html: payload.html,
+                text: payload.text,
+              }),
           },
         },
       }

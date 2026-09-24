@@ -37,6 +37,7 @@ export default async function forwardDoc(request) {
         for (let i = 0; i < recipients.length; i++) {
           let params = {
             extUserId: extUserId,
+            documentId: docId,
             pdfName: docName,
             url: _docRes?.SignedUrl || '',
             recipient: recipients[i],

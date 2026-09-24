@@ -40,6 +40,12 @@ function uuid() {
 
 const serverUrl = cloudServerUrl; //process.env.SERVER_URL;
 const appId = serverAppId;
+// sendmailv3 refuses calls with neither a user nor the master key; these are server-side.
+const sendmailHeaders = {
+  'Content-Type': 'application/json',
+  'X-Parse-Application-Id': appId,
+  'X-Parse-Master-Key': process.env.MASTER_KEY,
+};
 
 async function sendOwnerSummaryEmail({
   ownerEmail,
@@ -51,7 +57,7 @@ async function sendOwnerSummaryEmail({
 }) {
   try {
     const url = `${serverUrl}/functions/sendmailv3`;
-    const headers = { 'Content-Type': 'application/json', 'X-Parse-Application-Id': appId };
+    const headers = sendmailHeaders;
 
     const subject = `Bulk send finished: ${failed} of ${total} failed to create`;
 
@@ -124,7 +130,7 @@ async function sendMail(document, publicUrl) {
   for (let i = 0; i < signerMail.length; i++) {
     try {
       let url = `${serverUrl}/functions/sendmailv3`;
-      const headers = { 'Content-Type': 'application/json', 'X-Parse-Application-Id': appId };
+      const headers = sendmailHeaders;
       const objectId = signerMail[i]?.signerObjId;
       const hostUrl = baseUrl.origin;
       let encodeBase64;
@@ -173,6 +179,7 @@ async function sendMail(document, publicUrl) {
       };
       let params = {
         extUserId: document.ExtUserPtr.objectId,
+        documentId: document.objectId,
         recipient: existSigner?.Email || signerMail[i].email,
         subject: replaceVar?.subject ? replaceVar?.subject : mailTemplate(mailparam).subject,
         from: from,

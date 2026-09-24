@@ -53,6 +53,7 @@ async function sendDeclineMail(doc, publicUrl, userId, reason) {
 
     const params = {
       extUserId: sender.objectId,
+      documentId: doc.objectId,
       from: appName,
       recipient: creatorEmail,
       subject: subject,
