@@ -1,16 +1,4 @@
-import { useLocal } from '../../Utils.js';
-import getPresignedUrl, { presignedlocalUrl } from './getSignedUrl.js';
-
-const resolveUrl = async rawUrl => {
-  const isLocal = useLocal == 'true';
-  const shouldUsePresigned = useLocal !== 'true';
-  if (!rawUrl) return rawUrl;
-  if (shouldUsePresigned) {
-    return await getPresignedUrl(rawUrl);
-  } else if (isLocal) {
-    return presignedlocalUrl(rawUrl);
-  }
-};
+import { resolveStoredUrl as resolveUrl } from './getSignedUrl.js';
 
 async function TenantAterFind(request) {
   if (request.objects.length === 1) {

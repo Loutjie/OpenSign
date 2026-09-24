@@ -84,7 +84,12 @@ const isPdf = buffer => buffer.length >= 4 && buffer.subarray(0, 4).toString('la
 // complete, real PDF when a url is given.
 export default async function sendMailWithAttachment(
   params,
-  { relay = relayMail, downloadTimeoutMs = DOWNLOAD_TIMEOUT_MS, sign = getPresignedUrl } = {}
+  {
+    relay = relayMail,
+    downloadTimeoutMs = DOWNLOAD_TIMEOUT_MS,
+    sign = getPresignedUrl,
+    download = downloadToFile,
+  } = {}
 ) {
   const extUserId = params?.extUserId || '';
   const message = {
@@ -115,7 +120,7 @@ export default async function sendMailWithAttachment(
         });
         return { status: 'error' };
       }
-      const downloaded = await downloadToFile(downloadUrl, testPdf, {
+      const downloaded = await download(downloadUrl, testPdf, {
         timeoutMs: downloadTimeoutMs,
       });
       if (!downloaded.ok) {

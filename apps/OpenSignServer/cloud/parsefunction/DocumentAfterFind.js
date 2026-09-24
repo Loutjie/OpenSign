@@ -1,5 +1,5 @@
-import { handleValidImage, useLocal } from '../../Utils.js';
-import getPresignedUrl, { presignedlocalUrl } from './getSignedUrl.js';
+import { handleValidImage } from '../../Utils.js';
+import { resolveStoredUrl as resolveUrl } from './getSignedUrl.js';
 
 async function DocumentAfterFind(request) {
   if (request.objects.length === 1) {
@@ -10,18 +10,6 @@ async function DocumentAfterFind(request) {
       const certificateUrl = obj.get('CertificateUrl') && obj.get('CertificateUrl');
       const isPrefillExist = obj?.get('Placeholders')?.some(x => x.Role === 'prefill');
       const Placeholder = obj?.get('Placeholders') || [];
-
-      const shouldUsePresigned = useLocal !== 'true';
-      const isLocal = useLocal == 'true';
-
-      const resolveUrl = async rawUrl => {
-        if (!rawUrl) return rawUrl;
-        if (shouldUsePresigned) {
-          return await getPresignedUrl(rawUrl);
-        } else if (isLocal) {
-          return presignedlocalUrl(rawUrl);
-        }
-      };
 
       if (isPrefillExist) {
         const updatedPlaceHolder = await handleValidImage(Placeholder);

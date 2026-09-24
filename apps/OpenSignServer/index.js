@@ -14,10 +14,21 @@ import { appName, cloudServerUrl, serverAppId, useLocal } from './Utils.js';
 import { checkMailRelayConfig, makeApiCallback } from './leaselynxRelay.js';
 import { SSOAuth } from './auth/authadapter.js';
 import runDbMigrations from './migrationdb/index.js';
-import { validateSignedLocalUrl, isLocalStorage } from './cloud/parsefunction/getSignedUrl.js';
+import {
+  validateSignedLocalUrl,
+  isLocalStorage,
+  bucketConfigError,
+} from './cloud/parsefunction/getSignedUrl.js';
 let fsAdapter;
 
 if (useLocal !== 'true') {
+  // A bucket configuration that cannot sign would serve every file URL unsigned from a
+  // private bucket. Exit, so the Cloud Run revision fails its start-up check instead.
+  const configError = process.env.TESTING ? null : bucketConfigError();
+  if (configError) {
+    console.error(`FATAL: ${configError}`);
+    process.exit(1);
+  }
   try {
     // const spacesEndpoint = new AWS.Endpoint(process.env.DO_ENDPOINT);
     const spacesEndpoint = process.env.DO_ENDPOINT?.includes('http')
@@ -48,10 +59,10 @@ if (useLocal !== 'true') {
     };
     fsAdapter = new S3Adapter(s3Options);
   } catch (err) {
-    console.log('Please provide AWS credintials in env file! Defaulting to local storage.');
-    fsAdapter = new FSFilesAdapter({
-      filesSubDirectory: 'files', // optional, defaults to ./files
-    });
+    // Never fall back to local disk: on Cloud Run it is ephemeral, and every file
+    // written there would be lost with the instance.
+    console.error('FATAL: the S3 files adapter could not be created (check DO_* env).', err);
+    process.exit(1);
   }
 } else {
   fsAdapter = new FSFilesAdapter({
@@ -172,7 +183,9 @@ app.use(async function (req, res, next) {
   if (!isLocalStorage() && isRead && /\/files\//i.test(req.path)) {
     return res.status(403).json({ message: 'forbidden' });
   }
-  const isFilePath = /files/i.test(req.path);
+  // The same /files/ segment test as above; a bare /files/i also matched class names
+  // such as partners_DataFiles and refused their reads.
+  const isFilePath = /\/files\//i.test(req.path);
   if (isFilePath && req.method.toLowerCase() === 'get') {
     const serverUrl = new URL(process.env.SERVER_URL);
     const origin = serverUrl.pathname === '/api/app' ? serverUrl.origin + '/api' : serverUrl.origin;

@@ -47,6 +47,23 @@ function makeS3Client() {
   });
 }
 
+// Startup check for S3 mode (index.js). The adapter stores every file as
+// `${DO_BASEURL}/<key>`, and only a URL that isBucketUrl accepts is ever signed. If
+// DO_BASEURL, DO_SPACE and DO_ENDPOINT disagree, every stored URL would be handed out
+// unsigned from a private bucket, so the server must not start. Returns the error
+// message, or null when the configuration can sign.
+export function bucketConfigError(env = process.env) {
+  const probe = `${env.DO_BASEURL}/probe.pdf`;
+  if (env.DO_BASEURL && isBucketUrl(probe, env.DO_SPACE, makeEndpoint(env.DO_ENDPOINT))) {
+    return null;
+  }
+  return (
+    `DO_BASEURL (${env.DO_BASEURL || 'unset'}) is not a URL in bucket DO_SPACE ` +
+    `(${env.DO_SPACE || 'unset'}) on DO_ENDPOINT (${env.DO_ENDPOINT || 'unset'}): ` +
+    'stored files could not be signed.'
+  );
+}
+
 const isOurBucketUrl = url =>
   isBucketUrl(url, process.env.DO_SPACE, makeEndpoint(process.env.DO_ENDPOINT));
 
@@ -65,6 +82,14 @@ export default async function getPresignedUrl(url) {
     Key: objectKeyFromUrl(url),
   });
   return presign(makeS3Client(), command, { expiresIn: READ_URL_TTL_SECONDS });
+}
+
+// `resolveStoredUrl` is what the afterFind hooks hand out for a stored file URL. The
+// storage mode is read per call, not from Utils.js `useLocal` (fixed at import), so a
+// hook signs by the mode the process runs with.
+export async function resolveStoredUrl(rawUrl) {
+  if (!rawUrl) return rawUrl;
+  return isLocalStorage() ? presignedlocalUrl(rawUrl) : getPresignedUrl(rawUrl);
 }
 
 // `documentFileKeys` returns the object keys of every bucket file a contracts_Document

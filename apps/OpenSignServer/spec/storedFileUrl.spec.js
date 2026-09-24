@@ -6,7 +6,13 @@ import {
   isBucketUrl,
   objectKeyFromUrl,
 } from '../cloud/parsefunction/storedFileUrl.js';
-import getPresignedUrl, { documentFileKeys } from '../cloud/parsefunction/getSignedUrl.js';
+import getPresignedUrl, {
+  documentFileKeys,
+  bucketConfigError,
+} from '../cloud/parsefunction/getSignedUrl.js';
+import { spawnSync } from 'node:child_process';
+import sendMailWithAttachment from '../cloud/parsefunction/sendMailWithAttachment.js';
+import fs from 'node:fs';
 
 const SERVER = 'https://signing-api.leaselynx.co.za/app';
 const BUCKET = 'leaselynx-opensign-files';
@@ -34,6 +40,11 @@ describe('isLocalParseFileUrl', () => {
       expect(isLocalParseFileUrl(url, SERVER)).withContext(url).toBeFalse();
     }
   });
+  it('is false for another host with the same path', () => {
+    expect(
+      isLocalParseFileUrl('https://evil.example/app/files/opensign/x.pdf', SERVER)
+    ).toBeFalse();
+  });
   it('is false for other server paths and malformed input', () => {
     expect(isLocalParseFileUrl(`${SERVER}/functions/getsignedurl`, SERVER)).toBeFalse();
     expect(isLocalParseFileUrl('not a url', SERVER)).toBeFalse();
@@ -50,6 +61,76 @@ describe('isBucketUrl', () => {
     expect(isBucketUrl(`${ENDPOINT}/other-bucket/${KEY}`, BUCKET, ENDPOINT)).toBeFalse();
     expect(isBucketUrl('data:image/png;base64,AAAA', BUCKET, ENDPOINT)).toBeFalse();
     expect(isBucketUrl(`https://images.example.com/${KEY}`, BUCKET, ENDPOINT)).toBeFalse();
+  });
+  it('refuses another bucket virtual-hosted, and a host that only starts like the endpoint', () => {
+    expect(
+      isBucketUrl('https://other-bucket.storage.googleapis.com/x.pdf', BUCKET, ENDPOINT)
+    ).toBeFalse();
+    expect(
+      isBucketUrl('https://evil-storage.googleapis.com.example/x', BUCKET, ENDPOINT)
+    ).toBeFalse();
+    expect(
+      isBucketUrl(`https://${BUCKET}.storage.googleapis.com.example/x`, BUCKET, ENDPOINT)
+    ).toBeFalse();
+    expect(
+      isBucketUrl(`https://storage.googleapis.com.example/${BUCKET}/x`, BUCKET, ENDPOINT)
+    ).toBeFalse();
+  });
+});
+
+describe('bucketConfigError (S3-mode startup check)', () => {
+  const env = over => ({
+    DO_BASEURL: `${ENDPOINT}/${BUCKET}`,
+    DO_SPACE: BUCKET,
+    DO_ENDPOINT: ENDPOINT,
+    ...over,
+  });
+  it('accepts a base URL in the bucket, path-style or virtual-hosted, endpoint with or without scheme', () => {
+    expect(bucketConfigError(env())).toBeNull();
+    expect(
+      bucketConfigError(env({ DO_BASEURL: `https://${BUCKET}.storage.googleapis.com` }))
+    ).toBeNull();
+    expect(bucketConfigError(env({ DO_ENDPOINT: 'storage.googleapis.com' }))).toBeNull();
+  });
+  it('refuses a base URL in another bucket, on another host, or missing values', () => {
+    for (const over of [
+      { DO_BASEURL: `${ENDPOINT}/other-bucket` },
+      { DO_BASEURL: `https://cdn.example/${BUCKET}` },
+      { DO_SPACE: 'other-bucket' },
+      { DO_ENDPOINT: 'https://nyc3.digitaloceanspaces.com' },
+      { DO_BASEURL: undefined },
+      { DO_SPACE: undefined },
+    ]) {
+      expect(bucketConfigError(env(over)))
+        .withContext(JSON.stringify(over))
+        .toContain('DO_BASEURL');
+    }
+  });
+  it('makes the server exit non-zero at startup in S3 mode', () => {
+    // Runs index.js outside the TESTING harness; the check exits before anything starts.
+    const run = spawnSync(process.execPath, ['index.js'], {
+      env: {
+        ...process.env,
+        TESTING: '',
+        USE_LOCAL: 'false',
+        ...env({ DO_BASEURL: `${ENDPOINT}/other-bucket` }),
+      },
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+    expect(run.status).toBe(1);
+    expect(run.stderr).toContain('FATAL: DO_BASEURL');
+  });
+});
+
+// In local mode, the /files/ token check applies to file routes only, not to class names
+// that contain "files".
+describe('local-mode file token check', () => {
+  it('does not refuse a class whose name contains "Files"', async () => {
+    const res = await fetch('http://localhost:30001/test/classes/partners_DataFiles', {
+      headers: { 'X-Parse-Application-Id': 'test', 'X-Parse-Master-Key': 'test' },
+    });
+    expect(res.status).toBe(200);
   });
 });
 
@@ -201,6 +282,94 @@ describe('stored file signing (S3-mode env)', () => {
           templateId: template.id,
         })
       ).toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN }));
+    });
+  });
+
+  describe('sendMailWithAttachment with its default signer', () => {
+    it('downloads a bucket document through a fresh signature', async () => {
+      const requested = [];
+      const download = async (url, filePath) => {
+        requested.push(url);
+        fs.writeFileSync(filePath, Buffer.from('%PDF-1.4 synthetic'));
+        return { ok: true };
+      };
+      const sent = [];
+      const res = await sendMailWithAttachment(
+        {
+          documentId: 'doc1',
+          recipient: 'a@x.test',
+          subject: 'Signed',
+          url: `${PATH_URL}?X-Amz-Signature=stale`,
+          certificatePath: '/nonexistent/cert.pdf',
+        },
+        { relay: async m => sent.push(m), download }
+      );
+      expect(res).toEqual({ status: 'success' });
+      expect(requested.length).toBe(1);
+      const url = new URL(requested[0]);
+      expect(decodeURIComponent(url.pathname)).toBe(`/${BUCKET}/${KEY}`);
+      expect(url.searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
+      expect(sent[0].attachments.length).toBe(1);
+    });
+  });
+
+  describe('afterFind signs by the storage mode at call time', () => {
+    // The spec server starts with USE_LOCAL=true (spec .env), so an afterFind that read
+    // the mode at import would take the local branch here and sign nothing.
+    it("signs a document's bucket files and prefill image; passes a legacy local URL through", async () => {
+      const bucketUrl = key => `${ENDPOINT}/${BUCKET}/${key}`;
+      const legacy = `${SERVER}/files/opensign/legacy_prefill.png`;
+      const Doc = Parse.Object.extend('contracts_Document');
+      const saved = await new Doc().save(
+        {
+          Name: 'afterFind spec',
+          URL: bucketUrl('lease.pdf'),
+          SignedUrl: bucketUrl('signed_lease.pdf'),
+          CertificateUrl: bucketUrl('cert_lease.pdf'),
+          Placeholders: [
+            {
+              Role: 'prefill',
+              Id: 'p1',
+              placeHolder: [
+                {
+                  pageNumber: 1,
+                  pos: [
+                    { key: 1, type: 'image', options: { response: bucketUrl('prefill.png') } },
+                    { key: 2, type: 'draw', options: { response: legacy } },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+        { useMasterKey: true }
+      );
+      const doc = await new Parse.Query('contracts_Document').get(saved.id, {
+        useMasterKey: true,
+      });
+      const signature = url => new URL(url).searchParams.get('X-Amz-Signature');
+      for (const field of ['URL', 'SignedUrl', 'CertificateUrl']) {
+        expect(signature(doc.get(field)))
+          .withContext(field)
+          .toMatch(/^[0-9a-f]{64}$/);
+      }
+      const [image, drawing] = doc.get('Placeholders')[0].placeHolder[0].pos;
+      expect(signature(image.options.response)).toMatch(/^[0-9a-f]{64}$/);
+      expect(drawing.options.response).toBe(legacy);
+      expect(drawing.options.response).not.toContain('token=');
+      await saved.destroy({ useMasterKey: true });
+
+      // A legacy local URL in a top-level field takes the hook's own resolver.
+      const older = await new Doc().save(
+        { Name: 'legacy spec', URL: bucketUrl('old.pdf'), CertificateUrl: legacy },
+        { useMasterKey: true }
+      );
+      const first = await new Parse.Query('contracts_Document')
+        .equalTo('objectId', older.id)
+        .first({ useMasterKey: true });
+      expect(signature(first.get('URL'))).toMatch(/^[0-9a-f]{64}$/);
+      expect(first.get('CertificateUrl')).toBe(legacy);
+      await older.destroy({ useMasterKey: true });
     });
   });
 
