@@ -93,23 +93,23 @@ describe('A1 no self-signup', () => {
     expect(signUps).toEqual([{ useMasterKey: true }]);
   });
 
+  // Master key only. LeaseLynx's OpenSign profiles carry no UserRole, so production may
+  // have no contracts_Admin at all; a "first run" exception would reopen self-signup.
   describe('addadmin', () => {
-    const run = (deps, master = false) => makeAddAdmin({ addAdmin: async () => ({ sessionToken: 'r:admin' }), ...deps })(
-      { params: { userDetails: { email: 'Owner@X.test' } }, master });
+    const calls = [];
+    const run = master => makeAddAdmin({
+      addAdmin: async details => { calls.push(details); return { sessionToken: 'r:admin' }; },
+    })({ params: { userDetails: { email: 'Owner@X.test' } }, master });
+    beforeEach(() => { calls.length = 0; });
 
-    it('refuses a caller without the master key once an admin exists', async () => {
-      const err = await rejection(run({ hasAdmin: async () => true, findUser: async () => undefined }));
+    it('refuses a caller without the master key even when no admin exists', async () => {
+      const err = await rejection(run(false));
       expect(err?.code).toBe(FORBIDDEN);
+      expect(calls).toEqual([]);
     });
-    it('refuses to hand out an existing user\'s session to a caller without the master key', async () => {
-      const err = await rejection(run({ hasAdmin: async () => false, findUser: async () => ({ id: 'victim' }) }));
-      expect(err?.code).toBe(ParseSDK.Error.USERNAME_TAKEN);
-    });
-    it('creates the first admin during first-run setup', async () => {
-      expect(await run({ hasAdmin: async () => false, findUser: async () => undefined })).toEqual({ sessionToken: 'r:admin' });
-    });
-    it('is unrestricted for the master key', async () => {
-      expect(await run({ hasAdmin: async () => true, findUser: async () => ({ id: 'u' }) }, true)).toEqual({ sessionToken: 'r:admin' });
+    it('creates the admin for the master key', async () => {
+      expect(await run(true)).toEqual({ sessionToken: 'r:admin' });
+      expect(calls).toEqual([{ email: 'Owner@X.test' }]);
     });
   });
 });

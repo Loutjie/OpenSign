@@ -67,13 +67,6 @@ async function findUserByEmail(email) {
   return userQuery.first({ useMasterKey: true });
 }
 
-async function adminExists() {
-  const query = new Parse.Query('contracts_Users');
-  query.equalTo('UserRole', 'contracts_Admin');
-  query.notEqualTo('IsDisabled', true);
-  return !!(await query.first({ useMasterKey: true }));
-}
-
 async function saveUser(userDetails) {
   const userRes = await findUserByEmail(userDetails.email);
 
@@ -111,26 +104,17 @@ async function saveUser(userDetails) {
   }
 }
 
-// Without the master key, addadmin is only the first-run setup page (pages/AddAdmin.jsx):
-// allowed while no admin exists, and only for a new account. Otherwise anyone could name
-// an existing user (e.g. a LeaseLynx landlord, whose contracts_Users row links through
-// UserPtr, not UserId) and receive that user's session from the loginAs branch of saveUser.
-export function makeAddAdmin({
-  hasAdmin = adminExists,
-  findUser = findUserByEmail,
-  addAdmin = createAdmin,
-} = {}) {
+// Master key only. LeaseLynx provisions OpenSign users itself, and its profiles carry no
+// UserRole, so "no contracts_Admin exists" is the normal production state: a first-run
+// exception would leave self-signup open. Without the master key anyone could also name an
+// existing user and receive that user's session from the loginAs branch of saveUser.
+// This disables the first-run setup page (pages/AddAdmin.jsx), which calls without it.
+export function makeAddAdmin({ addAdmin = createAdmin } = {}) {
   return async function AddAdmin(request) {
-    const userDetails = request.params.userDetails;
     if (!request?.master) {
-      if (await hasAdmin()) {
-        throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'An admin already exists.');
-      }
-      if (await findUser(userDetails?.email)) {
-        throw new Parse.Error(Parse.Error.USERNAME_TAKEN, 'Account already exists for this username.');
-      }
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'addadmin requires the master key.');
     }
-    return addAdmin(userDetails);
+    return addAdmin(request.params.userDetails);
   };
 }
 

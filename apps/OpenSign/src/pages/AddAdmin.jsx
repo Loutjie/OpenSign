@@ -105,8 +105,8 @@ const AddAdmin = () => {
         localStorage.setItem("userDetails", JSON.stringify(userDetails));
         try {
           event.preventDefault();
-          // The server creates the account: OpenSign refuses a sign-up without the
-          // master key, and addadmin accepts one only while no admin exists.
+          // Disabled in the LeaseLynx fork: addadmin requires the master key, so this
+          // first-run page is always refused (119). LeaseLynx provisions OpenSign users.
           const params = {
             userDetails: {
               jobTitle: jobTitle,
