@@ -652,13 +652,6 @@ function WidgetsValueModal(props) {
     }
   };
 
-  const handleSaveBtn = async () => {
-    // if User checked save signature or save initials checkbox
-    if (accesstoken && isSavedSign) {
-      await handleSaveToMySign();
-    }
-    resetToDefault();
-  };
   const resetToDefault = () => {
     props?.setCurrWidgetsDetails({});
     if (
@@ -1809,9 +1802,21 @@ function WidgetsValueModal(props) {
         myStamp ||
         typedSignature
       ) {
-        //function to save all type draw or image
-        handleSaveBtn();
-      } else {
+        // Saving to My Signature is a network call: wait for it. The store
+        // (resetToDefault) and every state write below then run in one
+        // synchronous block, so React commits them together. Awaiting with
+        // nothing to wait for would yield first, and React would commit
+        // resetToDefault's cleared widget, unmounting this modal and dropping
+        // the finish state.
+        if (accesstoken && isSavedSign) {
+          await handleSaveToMySign();
+        }
+        resetToDefault();
+      } else if (!isFinishDoc) {
+        // No new value: Next clears an optional widget, as upstream does. Done
+        // can show on an optional widget the signer reopened (every required
+        // one is filled) and is enabled without a value, so on Done keep the
+        // response it already has.
         clearWidgetResponse();
       }
     }
