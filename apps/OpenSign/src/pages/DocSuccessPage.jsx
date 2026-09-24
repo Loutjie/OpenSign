@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import Confetti from "react-confetti"; // Import the confetti library
 import {
+  contractDocument,
   getBase64FromUrl,
   getSignedUrl,
   handleDownloadCertificate,
@@ -37,17 +38,31 @@ const DocSuccessPage = () => {
       const docUrl = urlParams.get("docurl");
       const certificate = urlParams.get("certificate");
       const completed = urlParams?.get("completed") || false;
+      // docurl was signed when the signer finished. It goes stale: the signature lapses,
+      // and a later signer's signature replaces the file, which getsignedurl then
+      // refuses. With a docid, load the document the way the signing page does
+      // (getDocument, same session token) and use its current file, which the
+      // server's afterFind has just signed. contractDocument never throws; a failed
+      // load returns an error object or string, not an array.
+      let currentUrl = "";
+      if (docId) {
+        const res = await contractDocument(docId);
+        const doc = Array.isArray(res) ? res[0] : null;
+        currentUrl = doc?.SignedUrl || doc?.URL || "";
+        if (!currentUrl) {
+          console.error("err in getDocument, re-signing docurl", res);
+        }
+      }
       const details = {
         objectId: docId,
-        SignedUrl: docUrl,
+        SignedUrl: currentUrl || docUrl,
         CertificateUrl: certificate,
         IsCompleted: completed,
       };
       setPdfDetails([details]);
       try {
-        // docurl was signed when the signer finished; a reload can come after that
-        // signature lapsed, so re-sign it against its document first.
-        const freshUrl = await getSignedUrl(docUrl, docId);
+        // Only without a docid, or when the load failed: re-sign docurl.
+        const freshUrl = currentUrl || (await getSignedUrl(docUrl, docId));
         const base64Pdf = await getBase64FromUrl(freshUrl);
         if (base64Pdf) {
           setPdfBase64Url(base64Pdf);

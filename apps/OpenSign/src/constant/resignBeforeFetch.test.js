@@ -71,4 +71,26 @@ describe("handleCheckPrefillCreateDoc", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(fresh("lease.pdf"));
   });
+
+  // The report pages do not catch; a thrown re-sign would leave their loader stuck.
+  // Falling back to the URL as loaded keeps the old behaviour: it may still be inside
+  // its 900 s signature.
+  it("falls back to the URL as loaded when the re-sign fails", async () => {
+    post.mockRejectedValue(new Error("Request failed with status code 400"));
+    fetchMock.mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) });
+    const xyPosition = [
+      {
+        Role: "prefill",
+        placeHolder: [{ pos: [{ key: 1, options: { name: "n", status: "required" } }] }]
+      }
+    ];
+    const pdfDetails = [{ objectId: "tpl1", URL: stale("lease.pdf") }];
+    const res = await handleCheckPrefillCreateDoc(
+      xyPosition, [], vi.fn(), 1, stale("lease.pdf"), pdfDetails, [], "u1"
+    );
+    expect(res?.status).toBe("unfilled");
+    expect(signCalls()).toHaveLength(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(stale("lease.pdf"));
+  });
 });

@@ -137,8 +137,16 @@ export const handleCheckPrefillCreateDoc = async (
   // `updatedPdfUrl` is its URL, signed when the template was loaded or saved; the
   // signature may have lapsed while the user filled the modals. Re-sign it against
   // that template. createDocument still gets `updatedPdfUrl` as loaded, as before.
+  // If the re-sign fails, fall back to the URL as loaded (it may still be inside its
+  // 900 s signature): the report pages do not catch, and a throw here would leave
+  // their loader stuck instead of creating the document as before.
   const templateId = pdfDetails?.[0]?.objectId;
-  const freshPdfUrl = await getSignedUrl(updatedPdfUrl, "", templateId);
+  let freshPdfUrl = updatedPdfUrl;
+  try {
+    freshPdfUrl = await getSignedUrl(updatedPdfUrl, "", templateId);
+  } catch (err) {
+    console.error("err in getsignedurl, using the URL as loaded", err);
+  }
   const pdfArrayBuffer = await convertPdfArrayBuffer(freshPdfUrl);
   const prefillData = xyPosition.find((x) => x.Role === "prefill");
   if (prefillData) {
