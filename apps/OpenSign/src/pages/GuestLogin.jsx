@@ -44,15 +44,19 @@ function GuestLogin() {
   });
   const [isOptionalDetails, setIsOptionalDetails] = useState(false);
 
-  const navigateToDoc = async (docId, contactId) => {
+  // `sendmailFlag` is passed in from the decoded link: on the first run the `sendmail`
+  // state set in the same call is not visible yet, and a document without OTP navigates
+  // straight away. Without it, ?sendmail=false (the sender emails the next signer itself,
+  // e.g. LeaseLynx) was dropped and the next signer got a second email from this page.
+  const navigateToDoc = async (docId, contactId, sendmailFlag = sendmail) => {
     try {
       const docDetails = await Parse.Cloud.run("getDocument", {
         docId: docId
       });
       if (!docDetails.error) {
-        if (sendmail === "false") {
+        if (sendmailFlag === "false") {
           navigate(
-            `/load/recipientSignPdf/${docId}/${contactId}?sendmail=${sendmail}`
+            `/load/recipientSignPdf/${docId}/${contactId}?sendmail=false`
           );
         } else {
           navigate(`/load/recipientSignPdf/${docId}/${contactId}`);
@@ -117,14 +121,14 @@ function GuestLogin() {
             params
           );
           setContactId(linkContactRes?.contactId);
-          await navigateToDoc(checkSplit[0], linkContactRes?.contactId);
+          await navigateToDoc(checkSplit[0], linkContactRes?.contactId, checkSplit[3]);
         } catch (err) {
           setIsLoading({ isLoad: false });
           console.log("Err in link ext contact", err);
         }
       } else {
         setContactId(checkSplit[2]);
-        await navigateToDoc(checkSplit[0], checkSplit[2]);
+        await navigateToDoc(checkSplit[0], checkSplit[2], checkSplit[3]);
       }
     }
   };
