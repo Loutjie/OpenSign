@@ -8,7 +8,9 @@ import path from 'node:path';
 import ParseSDK from 'parse/node';
 import { makeSendmailv3 } from '../cloud/parsefunction/sendMailv3.js';
 import sendMailWithAttachment from '../cloud/parsefunction/sendMailWithAttachment.js';
-import { makeSendMailOTPv1 } from '../cloud/parsefunction/SendMailOTPv1.js';
+import { makeSendMailOTPv1, userExists } from '../cloud/parsefunction/SendMailOTPv1.js';
+import { makeSendDeleteUserMail } from '../cloud/parsefunction/sendDeleteUserMail.js';
+import { FakeTable } from './utils/fakeQuery.js';
 
 // Cloud code uses the Parse global that parse-server installs; the unit run has no server.
 globalThis.Parse ??= ParseSDK;
@@ -39,11 +41,6 @@ describe('mail routing (static)', () => {
     ]) {
       expect(read(f)).withContext(f).toMatch(/import \{[^}]*\brelayMail\b[^}]*\} from '[./]+\/leaselynxRelay\.js'/);
     }
-  });
-
-  it('names the kind explicitly for OTP and delete-request mail', () => {
-    expect(read('cloud/parsefunction/SendMailOTPv1.js')).toContain("kind: 'otp'");
-    expect(read('cloud/parsefunction/sendDeleteUserMail.js')).toContain("kind: 'delete_request'");
   });
 
   it('sets the Parse mail adapter from the relay URL, not from SMTP or Mailgun', () => {
@@ -168,6 +165,12 @@ describe('sendMailWithAttachment', () => {
     expect(tempPdfs()).toEqual(before);
   });
 
+  it('passes bcc and reply-to on to the relay (D6)', async () => {
+    const { calls, relay } = recorder();
+    await sendMailWithAttachment({ ...base, bcc: 'copy@x.test', replyto: 'owner@x.test' }, { relay });
+    expect(calls[0]).toEqual(jasmine.objectContaining({ to: 'a@x.test,b@x.test', bcc: 'copy@x.test', replyTo: 'owner@x.test' }));
+  });
+
   it('returns { status: "error" } and still removes the temporary PDF when the relay throws', async () => {
     const before = tempPdfs();
     const { calls, relay } = recorder({ fail: true });
@@ -175,6 +178,53 @@ describe('sendMailWithAttachment', () => {
     expect(res).toEqual({ status: 'error' });
     expect(calls.length).toBe(1);
     expect(tempPdfs()).toEqual(before);
+  });
+});
+
+// D7: the delete-request mail, called with a fake relay (its kind was a grep before).
+describe('sendDeleteUserMail', () => {
+  const account = role => ({
+    id: 'ext1',
+    get: k => ({ Email: ' Admin@X.test', Name: 'Ada', UserRole: role })[k],
+  });
+  const make = (role, relayOpts) => {
+    const { calls, relay } = recorder(relayOpts);
+    const lookups = [];
+    const send = makeSendDeleteUserMail({
+      relay,
+      findUser: async (userId, callerId) => {
+        lookups.push([userId, callerId]);
+        return account(role);
+      },
+    });
+    return { calls, lookups, send };
+  };
+
+  it('mails the request to the account\'s own address, as delete_request', async () => {
+    process.env.SERVER_URL = 'https://sign.example/app';
+    const { calls, lookups, send } = make('contracts_Admin');
+    expect(await send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBe('mail sent.');
+    expect(lookups).toEqual([['u1', 'caller1']]);
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toEqual(jasmine.objectContaining({ kind: 'delete_request', to: 'admin@x.test', extUserId: 'ext1' }));
+    expect(calls[0].html).toContain('https://sign.example/delete-account/u1');
+  });
+
+  it('sends nothing for an account that is not an admin', async () => {
+    spyOn(console, 'log');
+    const { calls, send } = make('contracts_User');
+    await expectAsync(send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBeRejectedWith(
+      jasmine.objectContaining({ code: Parse.Error.SCRIPT_FAILED })
+    );
+    expect(calls).toEqual([]);
+  });
+
+  it('fails visibly when the relay fails', async () => {
+    spyOn(console, 'log');
+    const { send } = make('contracts_Admin', { fail: true });
+    await expectAsync(send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBeRejectedWith(
+      jasmine.objectContaining({ code: Parse.Error.SCRIPT_FAILED })
+    );
   });
 });
 
@@ -229,16 +279,26 @@ describe('SendOTPMailV1', () => {
     expect(calls.length).toBe(0);
   });
 
-  it('without a docId, sends only to an existing user', async () => {
-    const known = deps({ user: true });
-    await known.handler({ params: { email: 'user@x.test' } });
-    expect(known.calls.length).toBe(1);
-    expect(known.calls[0].documentId).toBeNull();
+  // D5: the real userExists, over a users table.
+  it('without a docId, sends only to an existing username, and answers a stranger the same', async () => {
+    const users = new FakeTable([{ username: 'user@x.test' }]);
+    const { calls, relay } = recorder();
+    const stored = [];
+    const handler = makeSendMailOTPv1({
+      relay,
+      userExists: email => userExists(email, { query: () => users.query() }),
+      storeOtp: async (email, code) => stored.push({ email, code }),
+      countMail: async () => {},
+    });
+    spyOn(console, 'log');
+    expect(await handler({ params: { email: 'stranger@x.test' } })).toBe('Otp send');
+    expect(calls.length).toBe(0);
+    expect(stored.length).toBe(0);
 
-    const unknown = deps({ user: false });
-    await unknown.handler({ params: { email: 'user@x.test' } });
-    expect(unknown.calls.length).toBe(0);
-    expect(unknown.stored.length).toBe(0);
+    expect(await handler({ params: { email: ' User@X.test' } })).toBe('Otp send');
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toEqual(jasmine.objectContaining({ kind: 'otp', documentId: null, to: ' User@X.test' }));
+    expect(users.queries.every(q => q.options?.useMasterKey === true)).toBe(true);
   });
 
   it('throws when the relay fails (the code was stored first: mailFailures.spec.js, B7)', async () => {

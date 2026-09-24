@@ -15,8 +15,8 @@ async function loadDocument(docId) {
   return res?.toJSON() || null;
 }
 
-async function userExists(email) {
-  const query = new Parse.Query(Parse.User);
+export async function userExists(email, { query: newQuery = () => new Parse.Query(Parse.User) } = {}) {
+  const query = newQuery();
   query.containedIn('username', [...new Set([email, normalise(email)])]);
   return !!(await query.first({ useMasterKey: true }));
 }

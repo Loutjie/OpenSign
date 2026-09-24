@@ -5,7 +5,24 @@ export const errHtml = err => {
   return `<html><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8" /><title>Reset Password</title></head>
   <body><h1 style="color:#1a5fa0; margin-bottom:16px;">${err}</h1></body></html>`;
 };
-const sendDeleteUserMail = async req => {
+async function findDeleteTarget(userId, callerId) {
+  const userPointer = { __type: 'Pointer', className: '_User', objectId: userId };
+
+  const createdByPointer = { __type: 'Pointer', className: '_User', objectId: callerId };
+
+  const userCondition = new Parse.Query('contracts_Users');
+  userCondition.equalTo('UserId', userPointer);
+
+  const userAndCreatorCondition = new Parse.Query('contracts_Users');
+  userAndCreatorCondition.equalTo('UserId', userPointer);
+  userAndCreatorCondition.equalTo('CreatedBy', createdByPointer);
+
+  const mainQuery = Parse.Query.or(userCondition, userAndCreatorCondition);
+
+  return mainQuery.first({ useMasterKey: true });
+}
+
+export const makeSendDeleteUserMail = ({ relay = relayMail, findUser = findDeleteTarget } = {}) => async req => {
   const app = req.params.app || appName;
   if (!req.user) {
     throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
@@ -16,20 +33,7 @@ const sendDeleteUserMail = async req => {
       throw new Parse.Error(Parse.Error.INVALID_QUERY, 'Missing userId parameter.');
     }
 
-    const userPointer = { __type: 'Pointer', className: '_User', objectId: userId };
-
-    const createdByPointer = { __type: 'Pointer', className: '_User', objectId: req.user.id };
-
-    const userCondition = new Parse.Query('contracts_Users');
-    userCondition.equalTo('UserId', userPointer);
-
-    const userAndCreatorCondition = new Parse.Query('contracts_Users');
-    userAndCreatorCondition.equalTo('UserId', userPointer);
-    userAndCreatorCondition.equalTo('CreatedBy', createdByPointer);
-
-    const mainQuery = Parse.Query.or(userCondition, userAndCreatorCondition);
-
-    const result = await mainQuery.first({ useMasterKey: true });
+    const result = await findUser(userId, req.user.id);
     const username = result.get('Email')?.toLowerCase()?.replace(/\s/g, '');
     const name = result?.get('Name') ? `<b>${result?.get('Name')}</b>` : '';
     const isAdmin = result?.get('UserRole') === 'contracts_Admin';
@@ -44,7 +48,7 @@ const sendDeleteUserMail = async req => {
     const deleteUrl = `${serverUrl}delete-account/${userId}`;
     // Render a simple HTML form. In production, consider using a templating engine.
 
-    await relayMail({
+    await relay({
       kind: 'delete_request',
       extUserId: result.id,
       fromName: app,
@@ -98,8 +102,8 @@ const sendDeleteUserMail = async req => {
     });
     return 'mail sent.';
   } catch (err) {
-    console.log('Err in sending delete user email ', err);
+    console.log('Err in sending delete user email ', { message: err?.message, status: err?.status });
     throw new Parse.Error(Parse.Error.SCRIPT_FAILED, err.message);
   }
 };
-export default sendDeleteUserMail;
+export default makeSendDeleteUserMail();

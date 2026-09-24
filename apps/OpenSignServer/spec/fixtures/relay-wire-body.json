@@ -1,0 +1,31 @@
+{
+  "_comment": "One relayed message on both sides of the OpenSign mail relay. OpenSign's relayMail must turn `message` into exactly `wireBody` (spec/leaselynxRelay.spec.js); LeaseLynx's validateRelayMessage must accept `wireBody` (tests/functions/opensignRelay.test.ts, in the parent repo, reads this file by path). Change it only with both sides.",
+  "message": {
+    "kind": "document",
+    "documentId": "doc-1",
+    "extUserId": "ext-1",
+    "fromName": "Ada Landlord",
+    "to": "tenant@example.test, surety@example.test",
+    "cc": "agent@example.test",
+    "bcc": "archive@example.test",
+    "replyTo": "landlord@example.test",
+    "subject": "Lease signed",
+    "html": "<p>Signed</p>",
+    "text": "Signed",
+    "attachments": [{ "filename": "lease.pdf", "contentType": "application/pdf", "content": "%PDF-1.4 fixture" }]
+  },
+  "wireBody": {
+    "kind": "document",
+    "documentId": "doc-1",
+    "extUserId": "ext-1",
+    "fromName": "Ada Landlord",
+    "to": ["tenant@example.test", "surety@example.test"],
+    "cc": ["agent@example.test"],
+    "bcc": ["archive@example.test"],
+    "replyTo": "landlord@example.test",
+    "subject": "Lease signed",
+    "html": "<p>Signed</p>",
+    "text": "Signed",
+    "attachments": [{ "filename": "lease.pdf", "contentType": "application/pdf", "contentBase64": "JVBERi0xLjQgZml4dHVyZQ==" }]
+  }
+}

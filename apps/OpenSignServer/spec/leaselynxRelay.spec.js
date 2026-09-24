@@ -1,5 +1,24 @@
 // spec/leaselynxRelay.spec.js
+import fs from 'node:fs';
+import path from 'node:path';
 import { relayMail, RelayError } from '../leaselynxRelay.js';
+
+// Shared with the LeaseLynx side (tests/functions/opensignRelay.test.ts in the parent repo
+// reads the same file and runs `wireBody` through validateRelayMessage).
+const wireFixture = JSON.parse(fs.readFileSync(path.resolve('spec/fixtures/relay-wire-body.json'), 'utf8'));
+
+describe('relayMail wire body (D3)', () => {
+  it('posts exactly the shared fixture body: comma-joined to split, cc, bcc, replyTo, documentId and kind', async () => {
+    const posted = [];
+    const fetchImpl = async (url, opts) => {
+      if (url.startsWith('http://metadata.google.internal')) return { ok: true, text: async () => 'ID.TOKEN' };
+      posted.push(JSON.parse(opts.body));
+      return { ok: true, status: 200, json: async () => ({ status: 'submitted', logicalId: 'L1' }) };
+    };
+    await relayMail(wireFixture.message, { fetchImpl, relayUrl: 'https://relay.example/relayOpenSignEmail' });
+    expect(posted).toEqual([wireFixture.wireBody]);
+  });
+});
 
 const msg = { kind: 'document', documentId: 'd1', extUserId: 'e1', fromName: 'Ada', to: ['t@x.test'],
   subject: 'S', html: '<p>h</p>', text: 't', attachments: [{ filename: 'a.pdf', contentType: 'application/pdf', content: Buffer.from('%PDF') }] };
