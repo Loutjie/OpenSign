@@ -183,7 +183,11 @@ function PrefillWidgetModal(props) {
       }
       setLoading(false);
     };
-    savePrefillImg();
+    // An unreadable image stays unloaded; the send then fails in the embed and says so.
+    savePrefillImg().catch((err) => {
+      console.error("prefill images not read", err);
+      setLoading(false);
+    });
   }, [props.xyPosition]);
 
   useEffect(() => {

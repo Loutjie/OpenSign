@@ -60,6 +60,10 @@ function DownloadPdfZip(props) {
           setIsDownloading,
           isZip
         );
+        // fetch(null) would fetch the app's own HTML and zip it as the certificate.
+        if (!certificateUrl) {
+          throw new Error("certificate URL not available");
+        }
         const pdf2Response = await fetch(certificateUrl);
         if (!pdf2Response.ok) {
           throw new Error(`Failed to fetch certificate PDF: ${certificateUrl}`);

@@ -763,8 +763,13 @@ function WidgetsValueModal(props) {
             canvasRef.current.fromDataURL(url);
           } else {
             const isAddSuffix = true;
-            const base64Url = await getBase64FromUrl(url, isAddSuffix);
-            canvasRef.current.fromDataURL(base64Url);
+            // An unreadable drawing leaves the pad empty to draw again.
+            try {
+              const base64Url = await getBase64FromUrl(url, isAddSuffix);
+              canvasRef.current?.fromDataURL(base64Url);
+            } catch (err) {
+              console.error("draw widget image not read", err);
+            }
           }
         }
       }

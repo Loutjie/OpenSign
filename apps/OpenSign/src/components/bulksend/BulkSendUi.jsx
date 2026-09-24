@@ -109,13 +109,20 @@ const BulkSendUi = (props) => {
                       widget.options?.defaultValue ||
                       "";
                     if (url && !isBase64(url)) {
-                      const signedUrl = await getSignedUrl(
-                        url,
-                        "", // docId
-                        props.item.objectId, // templateId
-                      );
+                      // A failed read leaves the widget empty, as the user sees it
+                      // in the form, instead of stalling the loader with a throw.
+                      try {
+                        const signedUrl = await getSignedUrl(
+                          url,
+                          "", // docId
+                          props.item.objectId, // templateId
+                        );
 
-                      response = await getBase64FromUrl(signedUrl, true);
+                        response = await getBase64FromUrl(signedUrl, true);
+                      } catch (err) {
+                        console.error("bulk send: widget image not read", err);
+                        response = "";
+                      }
                     } else {
                       response = "";
                     }

@@ -690,8 +690,11 @@ export const defaultWidthHeight = (type) => {
   }
 };
 //convert url to base64
+// Throws on a non-OK response: a lapsed or refused signed URL answers 403 with an XML
+// body, which must not be handed on as a PDF or image.
 export async function getBase64FromUrl(url, autosign) {
   const data = await fetch(url);
+  if (!data.ok) throw new Error(`fetch ${data.status}`);
   const blob = await data.blob();
   return new Promise((resolve) => {
     const reader = new FileReader();
@@ -2888,6 +2891,19 @@ export const handleDownloadPdf = async (
   }
 };
 
+// Download a document's current file as `docName`. pdfDetails was signed at page load
+// and the signature may have lapsed: re-sign it against the document first.
+export const downloadDocumentFile = async (pdfDetails, docName) => {
+  const url = pdfDetails?.[0]?.SignedUrl || pdfDetails?.[0]?.URL;
+  try {
+    const freshUrl = await getSignedUrl(url, pdfDetails?.[0]?.objectId);
+    await fetchUrl(freshUrl, docName);
+  } catch (err) {
+    console.log("err in getsignedurl", err);
+    alert(i18n.t("something-went-wrong-mssg"));
+  }
+};
+
 export function fileNameWithUnderscore(pdfName) {
   // Replace spaces with underscore
   return pdfName.replace(/ /g, "_");
@@ -2946,6 +2962,7 @@ export const handleToPrint = async (event, setIsDownloading, pdfDetails) => {
 };
 // `certificate` may have been signed when the page loaded; re-sign it against the
 // document that references it (its CertificateUrl) before fetching.
+// On failure it returns null and alerts, except for a ZIP, whose caller alerts.
 const downloadCertificate = async (certificate, isZip, asBlob, docId) => {
   try {
     const appName = "LeaseLynx";
@@ -2955,6 +2972,9 @@ const downloadCertificate = async (certificate, isZip, asBlob, docId) => {
     } else {
       if (asBlob) {
         const fetchCertificate = await fetch(certificateUrl);
+        if (!fetchCertificate.ok) {
+          throw new Error(`fetch ${fetchCertificate.status}`);
+        }
         // Convert the response into a Blob
         const blob = await fetchCertificate.blob();
         saveAs(blob, `Certificate_signed_by_${appName}.pdf`);
@@ -2964,6 +2984,10 @@ const downloadCertificate = async (certificate, isZip, asBlob, docId) => {
     }
   } catch (err) {
     console.error("download certificate err", err);
+    if (!isZip) {
+      alert(i18n.t("something-went-wrong-mssg"));
+    }
+    return null;
   }
 };
 

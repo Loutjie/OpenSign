@@ -167,7 +167,13 @@ function PlaceHolderSign() {
   useEffect(() => {
     dispatch(resetWidgetState([]));
     if (documentId) {
-      getDocumentDetails();
+      // A file that cannot be read (getBase64FromUrl, savePrefillImg) throws; show
+      // the page's error instead of leaving the loader up.
+      getDocumentDetails().catch((err) => {
+        console.log("Error: error in getDocumentDetails", err);
+        setHandleError(t("something-went-wrong-mssg"));
+        setIsLoading({ isLoad: false });
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

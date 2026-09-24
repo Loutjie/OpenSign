@@ -11,6 +11,7 @@ import {
   drawWidget
 } from "../constant/Utils";
 import { PDFDocument } from "pdf-lib";
+import i18n from "../i18n";
 
 export const prefillBlockColor = "transparent";
 export const prefillObj = (id) => {
@@ -24,6 +25,8 @@ export const prefillObj = (id) => {
   return obj;
 };
 //funtion to use embed prefill details in documentAdd commentMore actions
+// Returns the new file's URL, or `{ error }`; never undefined. Callers alert and stop
+// on `{ error }`: sending the template without its prefill values is never a fallback.
 export const handleEmbedPrefillToDoc = async (
   prefillDetails,
   scale,
@@ -54,13 +57,17 @@ export const handleEmbedPrefillToDoc = async (
       const tenantId = localStorage.getItem("TenantId");
       const buffer = atob(pdfBase64);
       SaveFileSize(buffer.length, pdfUrl, tenantId, userId);
+      if (!pdfUrl) {
+        return { error: "prefill file was not saved" };
+      }
       return pdfUrl;
     } catch (err) {
       console.log("error to convertBase64ToFile in placeholder flow", err);
-      alert(err?.message);
+      return { error: err?.message || "prefill embed failed" };
     }
   } catch (err) {
     console.log("error in handleEmbedPrefillToDoc function", err);
+    return { error: err?.message || "prefill embed failed" };
   }
 };
 //this function is used to open modal to show signers list
@@ -139,7 +146,9 @@ export const handleCheckPrefillCreateDoc = async (
   // that template. createDocument still gets `updatedPdfUrl` as loaded, as before.
   // If the re-sign fails, fall back to the URL as loaded (it may still be inside its
   // 900 s signature): the report pages do not catch, and a throw here would leave
-  // their loader stuck instead of creating the document as before.
+  // their loader stuck instead of creating the document as before. If that fetch
+  // fails too, a template with prefill values returns `{ status: "error" }` below;
+  // one without them never uses the bytes.
   const templateId = pdfDetails?.[0]?.objectId;
   let freshPdfUrl = updatedPdfUrl;
   try {
@@ -165,13 +174,25 @@ export const handleCheckPrefillCreateDoc = async (
     //condition to check prefill widgets exit or not if exist then embed prefill widgets value in template
     //and then create document
     if (prefillDetails) {
-      signedUrl = await handleEmbedPrefillToDoc(
-        prefillDetails,
-        scale,
-        pdfArrayBuffer,
-        prefillImg,
-        userId
-      );
+      // The prefill values exist only in the embedded copy. If the template could not
+      // be read (a lapsed signature and a failed re-sign) or the embed failed, stop:
+      // sending `updatedPdfUrl` would send the signers a template without them.
+      const embedded =
+        pdfArrayBuffer === "Error"
+          ? { error: "template PDF could not be read" }
+          : await handleEmbedPrefillToDoc(
+              prefillDetails,
+              scale,
+              pdfArrayBuffer,
+              prefillImg,
+              userId
+            ).catch((err) => ({ error: err?.message || "prefill embed failed" }));
+      if (!embedded || typeof embedded !== "string") {
+        console.error("prefill not embedded, document not sent", embedded?.error);
+        alert(i18n.t("something-went-wrong-mssg"));
+        return { status: "error", id: "something-went-wrong-mssg" };
+      }
+      signedUrl = embedded;
     } else {
       signedUrl = pdfDetails[0]?.URL;
     }
@@ -186,6 +207,9 @@ export const handleCheckPrefillCreateDoc = async (
     if (res.status === "success") {
       return res;
     } else if (res.status === "error") {
+      // Every `{ status: "error" }` from here has been shown to the user; the callers
+      // only clear their loader.
+      alert(i18n.t(res.id || "something-went-wrong-mssg"));
       return res;
     }
   } else {

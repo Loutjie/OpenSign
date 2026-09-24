@@ -426,6 +426,8 @@ const TemplatePlaceholder = () => {
       } else {
         setHandleError(t("something-went-wrong-mssg"));
       }
+      // The loader is drawn before the error; clear it or the error never shows.
+      setIsLoading({ isLoad: false });
     }
   });
 
@@ -1014,8 +1016,12 @@ const TemplatePlaceholder = () => {
         }
 
         setIsMailModal(true);
+      } else if (res?.status === "error") {
+        // handleCheckPrefillCreateDoc has already alerted; clear the loader.
+        setIsUiLoading(false);
       }
     } catch (e) {
+      setIsUiLoading(false);
       console.log("error in create document function", e);
     }
     setIsUseTemplate(false);

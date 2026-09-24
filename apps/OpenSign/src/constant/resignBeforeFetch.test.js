@@ -16,8 +16,12 @@ vi.stubGlobal("localStorage", {
 });
 const fetchMock = vi.fn();
 vi.stubGlobal("fetch", (...args) => fetchMock(...args));
+const alertMock = vi.fn();
+vi.stubGlobal("alert", alertMock);
+const saveAs = vi.fn();
+vi.mock("file-saver", () => ({ saveAs: (...a) => saveAs(...a) }));
 
-import { handleDownloadCertificate } from "./Utils";
+import { downloadDocumentFile, getBase64FromUrl, handleDownloadCertificate } from "./Utils";
 import { handleCheckPrefillCreateDoc } from "../utils/prefillUtils";
 
 const BUCKET = "https://storage.googleapis.com/leaselynx-opensign-files";
@@ -32,6 +36,8 @@ const signCalls = () => post.mock.calls.filter(([url]) => isSignCall(url));
 beforeEach(() => {
   post.mockReset();
   fetchMock.mockReset();
+  alertMock.mockReset();
+  saveAs.mockReset();
   store.clear();
   store.set("baseUrl", "https://signing-api.leaselynx.co.za/app/");
   // getsignedurl answers with the same key under a new signature.
@@ -47,6 +53,86 @@ describe("handleDownloadCertificate", () => {
     expect(url).toBe(fresh("cert.pdf"));
     expect(signCalls()).toHaveLength(1);
     expect(signCalls()[0][1]).toEqual({ url: stale("cert.pdf"), docId: "doc1", templateId: "" });
+  });
+
+  // No CertificateUrl on the loaded document: the certificate comes from getDocument,
+  // or failing that from generatecertificate, and is still re-signed against docId.
+  const certFrom = ({ getDocument, generate }) =>
+    post.mockImplementation(async (url, body) => {
+      if (isSignCall(url)) return { data: { result: body.url.replace(OLD_SIG, NEW_SIG) } };
+      if (url.endsWith("/getDocument")) return { data: { result: { CertificateUrl: getDocument } } };
+      if (url.endsWith("/generatecertificate")) return { data: { result: { CertificateUrl: generate } } };
+      throw new Error(`unexpected ${url}`);
+    });
+
+  it("re-signs a certificate read by getDocument against the document", async () => {
+    certFrom({ getDocument: stale("cert.pdf") });
+    const url = await handleDownloadCertificate([{ objectId: "doc1" }], vi.fn(), true);
+    expect(url).toBe(fresh("cert.pdf"));
+    expect(signCalls()).toHaveLength(1);
+    expect(signCalls()[0][1]).toEqual({ url: stale("cert.pdf"), docId: "doc1", templateId: "" });
+  });
+
+  it("re-signs a certificate from generatecertificate against the document", async () => {
+    certFrom({ generate: stale("new-cert.pdf") });
+    const url = await handleDownloadCertificate([{ objectId: "doc1" }], vi.fn(), true);
+    expect(url).toBe(fresh("new-cert.pdf"));
+    expect(signCalls()).toHaveLength(1);
+    expect(signCalls()[0][1]).toEqual({ url: stale("new-cert.pdf"), docId: "doc1", templateId: "" });
+  });
+
+  it("returns null and alerts when the re-sign fails", async () => {
+    post.mockRejectedValue(new Error("Request failed with status code 400"));
+    const pdfDetails = [{ objectId: "doc1", CertificateUrl: stale("cert.pdf") }];
+    const url = await handleDownloadCertificate(pdfDetails, vi.fn(), false);
+    expect(url).toBeNull();
+    expect(alertMock).toHaveBeenCalledWith("something-went-wrong-mssg");
+    expect(saveAs).not.toHaveBeenCalled();
+  });
+
+  it("returns null and alerts when the generated certificate cannot be read", async () => {
+    certFrom({ generate: stale("new-cert.pdf") });
+    fetchMock.mockResolvedValue({ ok: false, status: 403, blob: async () => new Blob(["<Error/>"]) });
+    const url = await handleDownloadCertificate([{ objectId: "doc1" }], vi.fn(), false);
+    expect(url).toBeNull();
+    expect(fetchMock).toHaveBeenCalledWith(fresh("new-cert.pdf"));
+    expect(alertMock).toHaveBeenCalledWith("something-went-wrong-mssg");
+    expect(saveAs).not.toHaveBeenCalled();
+  });
+});
+
+// PdfRequestFiles' download button.
+describe("downloadDocumentFile", () => {
+  it("re-signs the file against the document and downloads the fresh URL", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, blob: async () => new Blob(["%PDF-"]) });
+    const pdfDetails = [{ objectId: "doc1", SignedUrl: stale("signed.pdf"), URL: stale("lease.pdf") }];
+    await downloadDocumentFile(pdfDetails, "Lease.pdf");
+    expect(signCalls()).toHaveLength(1);
+    expect(signCalls()[0][1]).toEqual({ url: stale("signed.pdf"), docId: "doc1", templateId: "" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(fresh("signed.pdf"));
+    expect(saveAs).toHaveBeenCalledWith(expect.any(Blob), "Lease.pdf");
+    expect(alertMock).not.toHaveBeenCalled();
+  });
+
+  it("alerts and fetches nothing when the re-sign fails", async () => {
+    post.mockRejectedValue(new Error("Request failed with status code 400"));
+    await downloadDocumentFile([{ objectId: "doc1", SignedUrl: stale("signed.pdf") }], "Lease.pdf");
+    expect(alertMock).toHaveBeenCalledWith("something-went-wrong-mssg");
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(saveAs).not.toHaveBeenCalled();
+  });
+});
+
+describe("getBase64FromUrl", () => {
+  it("rejects a 403 instead of encoding the error body", async () => {
+    fetchMock.mockResolvedValue({ ok: false, status: 403, blob: async () => new Blob(["<Error/>"]) });
+    await expect(getBase64FromUrl(stale("lease.pdf"))).rejects.toThrow("fetch 403");
+  });
+
+  it("encodes an OK response", async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, blob: async () => new Blob(["%PDF-"]) });
+    await expect(getBase64FromUrl(fresh("lease.pdf"))).resolves.toBe(btoa("%PDF-"));
   });
 });
 
