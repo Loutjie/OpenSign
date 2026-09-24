@@ -16,24 +16,39 @@ function safeUnlink(filePath, label = 'file') {
   }
 }
 
+export const DOWNLOAD_TIMEOUT_MS = 60_000;
+
 // `downloadToFile` writes the document at `url` to `filePath`. Resolves { ok: true } only
 // for an HTTP 200 whose body has been completely written (the file stream's 'finish');
-// otherwise { ok: false, reason }.
-export function downloadToFile(url, filePath) {
+// otherwise { ok: false, reason }. The whole download, from connecting to the last byte
+// written, must finish within `timeoutMs`; a server that never answers is abandoned.
+export function downloadToFile(url, filePath, { timeoutMs = DOWNLOAD_TIMEOUT_MS } = {}) {
   return new Promise(resolve => {
     let settled = false;
+    let body;
+    let file;
+    const abort = new AbortController();
     const done = result => {
       if (!settled) {
         settled = true;
+        clearTimeout(timer);
         resolve(result);
       }
     };
-    const onResponse = (statusCode, body) => {
+    const timer = setTimeout(() => {
+      done({ ok: false, reason: `timed out after ${timeoutMs} ms` });
+      abort.abort();
+      body?.destroy?.();
+      file?.destroy?.();
+    }, timeoutMs);
+    const onResponse = (statusCode, responseBody) => {
+      body = responseBody;
+      if (settled) return body?.destroy?.();
       if (statusCode !== 200) {
         body?.resume?.();
         return done({ ok: false, reason: `HTTP ${statusCode}` });
       }
-      const file = fs.createWriteStream(filePath);
+      file = fs.createWriteStream(filePath);
       file.on('finish', () => done({ ok: true }));
       file.on('error', e => done({ ok: false, reason: e.message }));
       body.on('error', e => done({ ok: false, reason: e.message }));
@@ -42,13 +57,18 @@ export function downloadToFile(url, filePath) {
     const isSecure = new URL(url)?.protocol === 'https:' && new URL(url)?.hostname !== 'localhost';
     if (isSecure) {
       https
-        .get(url, response => onResponse(response.statusCode, response))
+        .get(url, { signal: abort.signal }, response => onResponse(response.statusCode, response))
         .on('error', e => done({ ok: false, reason: e.message }));
     } else {
       const httpsAgent = new https.Agent({ rejectUnauthorized: false }); // Disable SSL validation
       const newlocalUrl = url.replace('https://localhost:3001/api', 'http://localhost:8080');
       axios
-        .get(newlocalUrl, { responseType: 'stream', httpsAgent: httpsAgent, validateStatus: () => true })
+        .get(newlocalUrl, {
+          responseType: 'stream',
+          httpsAgent: httpsAgent,
+          validateStatus: () => true,
+          signal: abort.signal,
+        })
         .then(response => onResponse(response.status, response.data))
         .catch(e => done({ ok: false, reason: e.message }));
     }
@@ -61,7 +81,10 @@ const isPdf = buffer => buffer.length >= 4 && buffer.subarray(0, 4).toString('la
 // signed PDF and its certificate attached, through the LeaseLynx relay. Resolves
 // { status: 'success' } or { status: 'error' }; it never sends a mail without a
 // complete, real PDF when a url is given.
-export default async function sendMailWithAttachment(params, { relay = relayMail } = {}) {
+export default async function sendMailWithAttachment(
+  params,
+  { relay = relayMail, downloadTimeoutMs = DOWNLOAD_TIMEOUT_MS } = {}
+) {
   const extUserId = params?.extUserId || '';
   const message = {
     kind: 'document',
@@ -80,7 +103,9 @@ export default async function sendMailWithAttachment(params, { relay = relayMail
   const testPdf = `test_${Math.floor(Math.random() * 5000)}.pdf`;
   try {
     if (params.url) {
-      const downloaded = await downloadToFile(params.url, testPdf);
+      const downloaded = await downloadToFile(params.url, testPdf, {
+        timeoutMs: downloadTimeoutMs,
+      });
       if (!downloaded.ok) {
         alertMailFailure('document download failed; no email sent', {
           documentId: message.documentId,

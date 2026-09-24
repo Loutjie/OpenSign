@@ -3,6 +3,7 @@
 // caller or as a [mail-relay][ALERT] log, and no log carries the master key or an OTP.
 import fs from 'node:fs';
 import http from 'node:http';
+import net from 'node:net';
 import path from 'node:path';
 import ParseSDK from 'parse/node';
 import {
@@ -14,7 +15,7 @@ import {
 } from '../leaselynxRelay.js';
 import { makeSendmailv3 } from '../cloud/parsefunction/sendMailv3.js';
 import { postSendmailv3 } from '../cloud/parsefunction/sendmailClient.js';
-import sendMailWithAttachment from '../cloud/parsefunction/sendMailWithAttachment.js';
+import sendMailWithAttachment, { DOWNLOAD_TIMEOUT_MS } from '../cloud/parsefunction/sendMailWithAttachment.js';
 import { makeForwardDoc } from '../cloud/parsefunction/ForwardDoc.js';
 import { makeSendMailOTPv1 } from '../cloud/parsefunction/SendMailOTPv1.js';
 import { makeDeleteUserOtp } from '../cloud/customRoute/deleteAccount/deleteUserOtp.js';
@@ -316,6 +317,42 @@ describe('B4 sendMailWithAttachment download', () => {
     const sent = [];
     expect(await sendMailWithAttachment(params(base + '/slow.pdf'), { relay: async m => sent.push(m) })).toEqual({ status: 'success' });
     expect(sent[0].attachments[0].content).toEqual(pdfBytes);
+  });
+
+  describe('a server that never responds', () => {
+    // Accepts the connection and says nothing: an http request waits for a response, an
+    // https one for the TLS handshake.
+    let silent;
+    let port;
+    const sockets = new Set();
+    beforeAll(async () => {
+      silent = net.createServer(socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+      await new Promise(resolve => silent.listen(0, '127.0.0.1', resolve));
+      port = silent.address().port;
+    });
+    afterAll(() => new Promise(resolve => { sockets.forEach(s => s.destroy()); silent.close(resolve); }));
+
+    it('uses a timeout of about 60 s by default', () => {
+      expect(DOWNLOAD_TIMEOUT_MS).toBe(60_000);
+    });
+
+    // http:// goes through axios; https:// on a host other than localhost through https.get.
+    for (const scheme of ['http', 'https']) {
+      it(`gives up on a ${scheme} download, sends nothing and ALERTs`, async () => {
+        const before = tempPdfs();
+        const logs = captureLogs();
+        const sent = [];
+        const res = await sendMailWithAttachment(params(`${scheme}://127.0.0.1:${port}/never.pdf`), {
+          relay: async m => sent.push(m),
+          downloadTimeoutMs: 100,
+        });
+        expect(res).toEqual({ status: 'error' });
+        expect(sent).toEqual([]);
+        expect(logs.join('\n')).toContain('[mail-relay][ALERT] document download failed');
+        expect(logs.join('\n')).toContain('timed out');
+        expect(tempPdfs()).toEqual(before);
+      }, 2000);
+    }
   });
 });
 
