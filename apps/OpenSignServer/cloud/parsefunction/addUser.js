@@ -1,3 +1,5 @@
+import { createUserAccount } from './userAccount.js';
+
 export default async function addUser(request) {
   const { phone, name, password, organization, team, tenantId, timezone, role } = request.params;
   const email = request.params?.email?.toLowerCase()?.replace(/\s/g, '');
@@ -45,17 +47,7 @@ export default async function addUser(request) {
         extUser.set('Timezone', timezone);
       }
       try {
-        const _users = Parse.Object.extend('User');
-        const _user = new _users();
-        _user.set('name', name);
-        _user.set('username', email);
-        _user.set('email', email);
-        _user.set('password', password);
-        if (phone) {
-          _user.set('phone', phone);
-        }
-
-        const user = await _user.save();
+        const user = await createUserAccount({ name, email, phone, password });
         if (user) {
           extUser.set('CreatedBy', currentUser);
 

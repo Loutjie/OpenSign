@@ -1,3 +1,5 @@
+import { createUserAccount } from './userAccount.js';
+
 export default async function savecontact(request) {
   const name = request.params.name;
   const phone = request.params.phone;
@@ -38,16 +40,7 @@ export default async function savecontact(request) {
         });
       }
       try {
-        const _users = Parse.Object.extend('User');
-        const _user = new _users();
-        _user.set('name', name);
-        _user.set('username', email);
-        _user.set('email', email);
-        _user.set('password', email);
-        if (phone) {
-          _user.set('phone', phone);
-        }
-        const user = await _user.save();
+        const user = await createUserAccount({ name, email, phone, password: email });
         if (user) {
           contactQuery.set('CreatedBy', currentUserPtr);
           contactQuery.set('UserId', user);

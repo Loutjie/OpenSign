@@ -101,8 +101,21 @@ export function batchMailRecipients(document) {
 }
 
 // Runs in the background after the document is created (the caller has its answer), so
-// failures are one ALERT log naming the recipients that were not emailed.
+// failures are one ALERT log naming the recipients that were not emailed. It never
+// rejects: nothing awaits it, and an unhandled rejection would end the process.
 export async function sendBatchMail(document, publicUrl, { post } = {}) {
+  try {
+    return await sendBatchMailTo(document, publicUrl, { post });
+  } catch (err) {
+    // The document itself could not be mailed (e.g. no public URL or sender), so none of
+    // its signers were.
+    const failed = [{ recipient: null, ...errorSummary(err) }];
+    alertMailFailure('bulk send signing email failed', { documentId: document?.objectId, failed });
+    return { sent: 0, failed };
+  }
+}
+
+async function sendBatchMailTo(document, publicUrl, { post }) {
   const failedRecipients = [];
   const baseUrl = new URL(publicUrl);
   const timeToCompleteDays = document?.TimeToCompleteDays || 15;
@@ -196,22 +209,29 @@ export async function sendBatchMail(document, publicUrl, { post } = {}) {
   return { sent: signerMail.length - failedRecipients.length, failed: failedRecipients };
 }
 
-async function startBulkSendInBackground(
+async function findExtUserByUserId(userId) {
+  const extCls = new Parse.Query('contracts_Users');
+  extCls.equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: userId });
+  return extCls.first({ useMasterKey: true });
+}
+
+export async function startBulkSendInBackground(
   userId,
   Documents,
   Ip,
   parseConfig,
   type,
   publicUrl,
-  consumeQuota = makeMailQuota()
+  {
+    consumeQuota = makeMailQuota(),
+    findExtUser = findExtUserByUserId,
+    postBatch = (body, config) => axios.post('batch', body, config),
+    sendMail = sendBatchMail,
+    countDocument = deductcount,
+  } = {}
 ) {
-  const BATCH_LIMIT = 50; // Parse batch limit (safe)
-  const DOC_MAIL_CONCURRENCY = 5;
-
   // Find ext user
-  const extCls = new Parse.Query('contracts_Users');
-  extCls.equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: userId });
-  const resExt = await extCls.first({ useMasterKey: true });
+  const resExt = await findExtUser(userId);
   if (!resExt) throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'User not found.');
 
   const _resExt = JSON.parse(JSON.stringify(resExt));
@@ -314,9 +334,7 @@ async function startBulkSendInBackground(
     // is created.
     await consumeQuota(userId, batchMailRecipients(Documents?.[0]).length);
     const newrequests = [requests?.[0]];
-    const response = await axios.post('batch', { requests: newrequests }, parseConfig);
-    // Handle the batch query response
-    // console.log('Batch query response:', response.data);
+    const response = await postBatch({ requests: newrequests }, parseConfig);
     if (response.data && response.data.length > 0) {
       const document = Documents?.[0];
       const updateDocuments = {
@@ -324,9 +342,10 @@ async function startBulkSendInBackground(
         objectId: response.data[0]?.success?.objectId,
         createdAt: response.data[0]?.success?.createdAt,
       };
-      deductcount(response.data.length, resExt.id);
-      console.log('here');
-      sendBatchMail(updateDocuments, publicUrl); //sessionToken
+      countDocument(response.data.length, resExt.id);
+      // Not awaited: the caller has its answer once the document exists. sendBatchMail
+      // never rejects; its failures are an ALERT log.
+      sendMail(updateDocuments, publicUrl);
       return { total: 1, created: 1, failed: 0 };
     }
   }

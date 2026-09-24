@@ -1,3 +1,5 @@
+import { createUserAccount } from './userAccount.js';
+
 // `saveRoleContact` is used to save user in contracts_Guest role and create contact
 const saveRoleContact = async contact => {
   const contactQuery = new Parse.Object('contracts_Contactbook');
@@ -217,16 +219,7 @@ export default async function linkContactToDoc(req) {
                 }
               } else {
                 // create new user in _User class on the basis of details provide by user
-                const _users = Parse.Object.extend('User');
-                const _user = new _users();
-                _user.set('name', name);
-                _user.set('username', email);
-                _user.set('email', email);
-                _user.set('password', email);
-                if (phone) {
-                  _user.set('phone', phone);
-                }
-                const newUserRes = await _user.save();
+                const newUserRes = await createUserAccount({ name, email, phone, password: email });
                 const contact = {
                   UserId: { __type: 'Pointer', className: '_User', objectId: newUserRes.id },
                   Name: name,

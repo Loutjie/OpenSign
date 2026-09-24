@@ -20,7 +20,11 @@ import { makeSendMailOTPv1 } from '../cloud/parsefunction/SendMailOTPv1.js';
 import { makeDeleteUserOtp } from '../cloud/customRoute/deleteAccount/deleteUserOtp.js';
 import { sendDeleteOtpEmail } from '../cloud/customRoute/deleteAccount/deleteUtils.js';
 import { sendDeclineMail } from '../cloud/parsefunction/declinedocument.js';
-import { sendBatchMail, sendOwnerSummaryEmail } from '../cloud/parsefunction/createBatchDocs.js';
+import {
+  sendBatchMail,
+  sendOwnerSummaryEmail,
+  startBulkSendInBackground,
+} from '../cloud/parsefunction/createBatchDocs.js';
 import { sendNotifyMail, sendCompletedMail } from '../cloud/parsefunction/pdf/PDF.js';
 
 globalThis.Parse ??= ParseSDK;
@@ -179,6 +183,56 @@ describe('B1/D7 server-side sendmailv3 callers', () => {
     const logs = captureLogs();
     await sendOwnerSummaryEmail({ ownerEmail: 'owner@x.test', total: 1, created: 1, failed: 0 }, { post: fakePost({ fail: true }).post });
     expect(logs.join('\n')).toContain('[mail-relay][ALERT] bulk send owner summary email failed');
+  });
+
+  it('sendBatchMail never rejects (it runs unawaited): a document it cannot mail is an ALERT', async () => {
+    const logs = captureLogs();
+    const broken = { objectId: 'doc8', Placeholders: [{ Role: 'Tenant', email: 'a@x.test' }] };
+    const res = await sendBatchMail(broken, undefined, { post: fakePost().post });
+    expect(res).toEqual({ sent: 0, failed: [jasmine.objectContaining({ recipient: null })] });
+    expect(logs.join('\n')).toContain('[mail-relay][ALERT] bulk send signing email failed');
+    expect(logs.join('\n')).toContain('doc8');
+  });
+});
+
+describe('B1/A3 createBatchDocs: the daily limit before the document exists', () => {
+  const documents = [{
+    Name: 'Lease', URL: 'https://files/x.pdf', SendinOrder: false,
+    CreatedBy: { objectId: 'u1' },
+    ExtUserPtr: { className: 'contracts_Users', objectId: 'ext1', Name: 'Owner', Email: 'owner@x.test' },
+    Placeholders: [{ Role: 'Tenant', email: 'a@x.test' }, { Role: 'prefill' }, { Role: 'Surety', email: 'b@x.test' }],
+    Signers: [],
+  }];
+  const deps = (over = {}) => {
+    const order = [];
+    return {
+      order,
+      consumeQuota: async (userId, count) => { order.push(['quota', userId, count]); },
+      findExtUser: async () => ({ id: 'ext1', toJSON: () => ({ objectId: 'ext1' }) }),
+      postBatch: async body => {
+        order.push(['create', body.requests.length]);
+        return { data: [{ success: { objectId: 'doc9', createdAt: '2026-09-24T00:00:00Z' } }] };
+      },
+      sendMail: async doc => { order.push(['mail', doc.objectId]); },
+      countDocument: () => {},
+      ...over,
+    };
+  };
+
+  it('counts the signers against the caller\'s limit before creating the document, then mails', async () => {
+    const d = deps();
+    const res = await startBulkSendInBackground('u1', documents, '', {}, 'quicksend', 'https://sign.example', d);
+    expect(res).toEqual({ total: 1, created: 1, failed: 0 });
+    expect(d.order).toEqual([['quota', 'u1', 2], ['create', 1], ['mail', 'doc9']]);
+  });
+
+  it('creates no document and mails no one when the limit is reached', async () => {
+    const d = deps({
+      consumeQuota: async () => { throw new ParseSDK.Error(ParseSDK.Error.OPERATION_FORBIDDEN, 'Daily email limit reached'); },
+    });
+    const err = await rejection(startBulkSendInBackground('u1', documents, '', {}, 'quicksend', 'https://sign.example', d));
+    expect(err?.message).toBe('Daily email limit reached');
+    expect(d.order).toEqual([]);
   });
 });
 

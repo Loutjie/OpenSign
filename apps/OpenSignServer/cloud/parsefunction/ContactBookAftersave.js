@@ -1,3 +1,5 @@
+import { createUserAccount } from './userAccount.js';
+
 async function ContactbookAftersave(request) {
   /* In beforesave or aftersave if you want to check if an object is being inserted or updated 
     you can check as follows */
@@ -25,16 +27,12 @@ async function ContactbookAftersave(request) {
       const Email = object.get('Email');
       const Phone = object.get('Phone');
       try {
-        const _users = Parse.Object.extend('User');
-        const _user = new _users();
-        _user.set('name', Name);
-        _user.set('username', Email);
-        _user.set('email', Email);
-        _user.set('password', Email);
-        if (Email) {
-          _user.set('phone', Phone);
-        }
-        const user = await _user.save();
+        const user = await createUserAccount({
+          name: Name,
+          email: Email,
+          phone: Phone,
+          password: Email,
+        });
         if (user) {
           object.set('UserId', user);
           const acl = object.getACL() || new Parse.ACL();
@@ -45,7 +43,13 @@ async function ContactbookAftersave(request) {
           // console.log('res update new user with contac', res);
         }
       } catch (err) {
-        // console.log('err ', err);
+        if (err.code !== 202) {
+          // The contact is left without an account, so its signer cannot sign in.
+          console.error('[contact-user] could not create the _User for a contact', {
+            message: err?.message,
+            code: err?.code,
+          });
+        }
         if (err.code === 202) {
           const userQuery = new Parse.Query(Parse.User);
           userQuery.equalTo('email', Email);

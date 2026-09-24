@@ -1,3 +1,5 @@
+import { createUserAccount } from './userAccount.js';
+
 export default async function editContact(request) {
   const { contactId, name, email, phone, tenantId } = request.params;
   const company = request.params?.company;
@@ -42,17 +44,13 @@ export default async function editContact(request) {
         objectId: tenantId,
       });
       try {
-        const _users = Parse.Object.extend('User');
-        const _user = new _users();
-        _user.set('name', name);
-        _user.set('username', email?.toLowerCase()?.replace(/\s/g, ''));
-        _user.set('email', email?.toLowerCase()?.replace(/\s/g, ''));
-        _user.set('password', email?.toLowerCase()?.replace(/\s/g, ''));
-        if (phone) {
-          _user.set('phone', phone);
-        }
-
-        const user = await _user.save();
+        const normalisedEmail = email?.toLowerCase()?.replace(/\s/g, '');
+        const user = await createUserAccount({
+          name,
+          email: normalisedEmail,
+          phone,
+          password: normalisedEmail,
+        });
         if (user) {
           contactQuery.set('CreatedBy', createdBy);
           contactQuery.set('UserId', user);
