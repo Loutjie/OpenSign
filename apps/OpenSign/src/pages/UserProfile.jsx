@@ -218,8 +218,7 @@ function UserProfile() {
 
   //`handleVerifyBtn` function is used to send otp on user mail
   const handleVerifyBtn = async () => {
-    setIsVerifyModal(true);
-    try { await handleSendOTP(Parse.User.current().getEmail()); }
+    try { await handleSendOTP(Parse.User.current().getEmail()); setIsVerifyModal(true); }
     catch (error) { alert(error.message); }
   };
   const handleCloseVerifyModal = async () => {

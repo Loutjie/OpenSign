@@ -80,6 +80,7 @@ export function makeSendMailOTPv1(deps = {}) {
     const docId = request.params?.docId;
     const TenantId = request.params.TenantId ? request.params.TenantId : undefined;
     const AppName = appName;
+    const ownsEmail = request.user && normalise(request.user.get('email')) === normalise(email);
 
     // Send only to someone this document (or, with no document, this server) knows.
     // Anyone else gets the same answer and no email, so the endpoint cannot be used to
@@ -106,9 +107,12 @@ export function makeSendMailOTPv1(deps = {}) {
     try {
       reservation = await saveOtp(email, code, TenantId, new Date(now().getTime() + OTP_TTL_MS));
     } catch (error) {
-      // A no-document request must not reveal whether the address is a user
-      // through a rate-limit or temporary-lock response.
-      if (!docId && error?.code === Parse.Error.OPERATION_FORBIDDEN) return 'Otp send';
+      // A no-document request must not reveal whether the address is a user,
+      // including during a storage outage. The signed-in owner sees the error.
+      if (!docId && !ownsEmail) {
+        console.error('SendOTPMailV1 OTP storage failed', { code: error?.code, message: error?.message });
+        return 'Otp send';
+      }
       throw error;
     }
     try {
@@ -129,7 +133,7 @@ export function makeSendMailOTPv1(deps = {}) {
         catch (rollbackError) { console.error('SendOTPMailV1 OTP rollback failed', rollbackError); }
       }
       // Without a document, an error would expose whether this address exists.
-      if (!docId) return 'Otp send';
+      if (!docId && !ownsEmail) return 'Otp send';
       throw new Parse.Error(Parse.Error.SCRIPT_FAILED, 'The OTP email could not be sent. Please wait one minute before retrying if the code does not arrive.');
     }
     if (extUserId) {
