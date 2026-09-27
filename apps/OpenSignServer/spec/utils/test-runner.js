@@ -16,7 +16,9 @@ let parseServerState = {};
 export async function startParseServer() {
   delete config.databaseAdapter;
   const parseServerOptions = Object.assign(config, {
-    databaseURI: 'mongodb://localhost:27017/parse-test',
+    databaseURI: process.env.MONGODB_URI
+      ? `${process.env.MONGODB_URI.replace(/\/$/, '')}/parse-test`
+      : 'mongodb://localhost:27017/parse-test',
     masterKey: 'test',
     javascriptKey: 'test',
     appId: 'test',

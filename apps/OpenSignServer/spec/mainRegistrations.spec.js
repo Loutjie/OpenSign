@@ -1,6 +1,6 @@
 // spec/mainRegistrations.spec.js
-// Loads the real cloud/main.js with Parse.Cloud's registration calls recorded, so the
-// guards are proved registered, not just written.
+// Re-import the entry module with a fresh URL so its top-level registrations run
+// even when ParseServer has already loaded main.js during test setup.
 import ParseSDK from 'parse/node';
 import { rejectSelfSignup, requireMasterKey } from '../cloud/parsefunction/accessGuards.js';
 
@@ -14,7 +14,7 @@ describe('cloud/main.js registrations', () => {
       Parse.Cloud[kind] = (target, fn) => calls.push({ kind, target: target?.className || target, fn });
     }
     try {
-      await import('../cloud/main.js');
+      await import(new URL(`../cloud/main.js?registration-test=${Date.now()}`, import.meta.url));
     } finally {
       Object.assign(Parse.Cloud, saved);
     }

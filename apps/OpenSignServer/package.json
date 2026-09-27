@@ -14,7 +14,7 @@
     "lint-fix": "eslint --cache --fix ./cloud && eslint --cache --fix index.js && eslint --cache --fix ./spec",
     "prettier": "prettier --write '{cloud,spec}/{**/*,*}.js' 'index.js'",
     "start": "node index.js",
-    "test": "mongodb-runner start && TESTING=true jasmine",
+    "test": "mongodb-runner exec -- env TESTING=true USE_LOCAL=true SERVER_URL=http://localhost:8080/app jasmine",
     "watch": "nodemon index.js"
   },
   "dependencies": {
@@ -43,7 +43,6 @@
     "multer": "^2.1.1",
     "multer-s3": "^3.0.1",
     "node-forge": "^1.3.3",
-    "nodemailer": "^8.0.2",
     "p-limit": "^7.3.0",
     "parse": "^8.1.0",
     "parse-dbtool": "^1.2.0",
@@ -53,7 +52,6 @@
     "posthog-node": "^5.21.2",
     "qrcode": "^1.5.4",
     "rate-limiter-flexible": "^9.1.1",
-    "sharp": "^0.34.5",
     "speakeasy": "^2.0.0",
     "ws": "^8.19.0"
   },
@@ -71,9 +69,10 @@
     "ws": "$ws",
     "parse": "$parse",
     "form-data": "$form-data",
-    "@parse/push-adapter": "$@parse/push-adapter"
+    "@parse/push-adapter": "$@parse/push-adapter",
+    "lodash": "^4.18.1"
   },
   "engines": {
-    "node": "18 || 20 || 22"
+    "node": ">=22.13 <23"
   }
 }
