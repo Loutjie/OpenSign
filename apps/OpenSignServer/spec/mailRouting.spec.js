@@ -324,6 +324,33 @@ describe('SendOTPMailV1', () => {
     expect(await handler({ params: { email: 'unknown@x.test' } })).toBe('Otp send');
   });
 
+  it('reports a storage failure to the authenticated owner but hides account existence from anonymous callers', async () => {
+    const handler = makeSendMailOTPv1({
+      relay: async () => { throw new Error('must not relay'); },
+      userExists: async email => email === 'known@x.test',
+      storeOtp: async () => { throw new Error('database unavailable'); },
+    });
+    spyOn(console, 'error');
+    spyOn(console, 'log');
+    const known = { params: { email: 'known@x.test' } };
+    expect(await handler(known)).toBe('Otp send');
+    expect(await handler({ params: { email: 'unknown@x.test' } })).toBe('Otp send');
+    const owner = { get: field => field === 'email' ? 'known@x.test' : undefined };
+    await expectAsync(handler({ ...known, user: owner })).toBeRejectedWithError('database unavailable');
+  });
+
+  it('reports a relay refusal and resend limit to the authenticated owner', async () => {
+    const owner = { get: field => field === 'email' ? 'known@x.test' : undefined };
+    const base = { userExists: async () => true, rollback: async () => {}, relay: async () => { throw Object.assign(new Error('refused'), { uncertain: false }); } };
+    const relayHandler = makeSendMailOTPv1({ ...base, storeOtp: async () => ({ reserved: true }) });
+    spyOn(console, 'log');
+    await expectAsync(relayHandler({ params: { email: 'known@x.test' }, user: owner }))
+      .toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.SCRIPT_FAILED }));
+    const limitHandler = makeSendMailOTPv1({ ...base, storeOtp: async () => { throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'limit'); } });
+    await expectAsync(limitHandler({ params: { email: 'known@x.test' }, user: owner }))
+      .toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN }));
+  });
+
   it('keeps no-document relay-failure responses uniform for known and unknown addresses', async () => {
     const handler = makeSendMailOTPv1({
       relay: async () => { throw Object.assign(new Error('refused'), { uncertain: false }); },

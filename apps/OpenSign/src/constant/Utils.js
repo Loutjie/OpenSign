@@ -2783,10 +2783,17 @@ export const handleSendOTP = async (email) => {
   let url = `${localStorage.getItem("baseUrl")}functions/SendOTPMailV1`;
   const headers = {
     "Content-Type": "application/json",
-    "X-Parse-Application-Id": localStorage.getItem("parseAppId")
+    "X-Parse-Application-Id": localStorage.getItem("parseAppId"),
+    ...(Parse.User.current()?.getSessionToken()
+      ? { "X-Parse-Session-Token": Parse.User.current().getSessionToken() }
+      : {})
   };
   const body = { email };
-  await axios.post(url, body, { headers });
+  try {
+    await axios.post(url, body, { headers });
+  } catch (error) {
+    throw new Error(error?.response?.data?.error || "The verification email could not be sent. Please try again later.");
+  }
 };
 export const fetchUrl = async (url, fileName) => {
   try {
