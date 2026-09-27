@@ -36,6 +36,9 @@ export async function storeOtp(email, code, tenantId, expiresAt, now = new Date(
   // A completed 15-minute lock can be reset when a fresh code is requested.
   // The filter prevents this reset from clearing a newer concurrent lock.
   const existing = await collection.findOne({ _id: key }, { projection: { LockedUntil: 1, SendWindowStart: 1 } });
+  if (existing?.LockedUntil && existing.LockedUntil > now) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Too many incorrect codes. Please try again after the temporary lock expires.');
+  }
   if (existing?.LockedUntil && existing.LockedUntil <= now) {
     await collection.updateOne({ _id: key, LockedUntil: existing.LockedUntil }, {
       $unset: { LockedUntil: '' }, $set: { FailedAttempts: 0 },
@@ -48,9 +51,10 @@ export async function storeOtp(email, code, tenantId, expiresAt, now = new Date(
     }, { $set: { SendWindowStart: now, SendCount: 0 } });
   }
   try {
-    await collection.updateOne({
+    const previous = await collection.findOneAndUpdate({
       _id: key,
       $and: [
+        { $or: [{ LockedUntil: { $exists: false } }, { LockedUntil: { $lte: now } }] },
         { $or: [{ LastSentAt: { $exists: false } }, { LastSentAt: { $lte: new Date(now.getTime() - MIN_RESEND_MS) } }] },
         { $or: [{ SendCount: { $exists: false } }, { SendCount: { $lt: MAX_DAILY_SENDS } }] },
       ],
@@ -63,13 +67,39 @@ export async function storeOtp(email, code, tenantId, expiresAt, now = new Date(
       $setOnInsert: { _created_at: now, FailedAttempts: 0, SendWindowStart: now },
       $inc: { SendCount: 1 },
       $unset: { UsedAt: '' },
-    }, { upsert: true });
+    }, { upsert: true, returnDocument: 'before' });
+    return { key, code, sentAt: now, previous };
   } catch (error) {
     if (error?.code === 11000) {
       throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Code request limit reached. Please try again later.');
     }
     throw error;
   }
+}
+
+// A definite relay refusal means nobody received the replacement. Restore the
+// prior usable code and send allowance, but only if this send still owns the row.
+// Timeouts are uncertain and must not be rolled back: the mail may have arrived.
+export async function rollbackOtp(reservation) {
+  if (!reservation) return;
+  const { key, code, sentAt, previous } = reservation;
+  const collection = await otpCollection();
+  const filter = { _id: key, OTP: code, LastSentAt: sentAt };
+  if (!previous) {
+    await collection.deleteOne(filter);
+    return;
+  }
+  const fields = ['OTP', 'ExpiresAt', 'LastSentAt', 'SendCount', 'TenantId', 'UsedAt'];
+  const set = {};
+  const unset = {};
+  for (const field of fields) {
+    if (Object.hasOwn(previous, field)) set[field] = previous[field];
+    else unset[field] = '';
+  }
+  const update = {};
+  if (Object.keys(set).length) update.$set = set;
+  if (Object.keys(unset).length) update.$unset = unset;
+  await collection.updateOne(filter, update);
 }
 
 // Parse.Query + Parse.Object.save is read-then-write. Mongo's conditional update

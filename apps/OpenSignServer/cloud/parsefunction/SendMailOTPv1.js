@@ -2,7 +2,7 @@ import { appName, updateMailCount } from '../../Utils.js';
 import { relayMail } from '../../leaselynxRelay.js';
 import { randomInt } from 'node:crypto';
 import { OTP_TTL_MS } from './otpPolicy.js';
-import { storeOtp } from './otpClaim.js';
+import { storeOtp, rollbackOtp } from './otpClaim.js';
 
 const normalise = email =>
   String(email || '')
@@ -68,6 +68,7 @@ export function makeSendMailOTPv1(deps = {}) {
     loadDocument: loadDoc = loadDocument,
     userExists: isUser = userExists,
     storeOtp: saveOtp = storeOtp,
+    rollback = rollbackOtp,
     countMail = updateMailCount,
     now = () => new Date(),
   } = deps;
@@ -101,7 +102,15 @@ export function makeSendMailOTPv1(deps = {}) {
     const extUserId = doc?.ExtUserPtr?.objectId || null;
     // Stored before it is sent: a stored code nobody received is harmless, a received
     // code that was never stored cannot be used.
-    await saveOtp(email, code, TenantId, new Date(now().getTime() + OTP_TTL_MS));
+    let reservation;
+    try {
+      reservation = await saveOtp(email, code, TenantId, new Date(now().getTime() + OTP_TTL_MS));
+    } catch (error) {
+      // A no-document request must not reveal whether the address is a user
+      // through a rate-limit or temporary-lock response.
+      if (!docId && error?.code === Parse.Error.OPERATION_FORBIDDEN) return 'Otp send';
+      throw error;
+    }
     try {
       await relay({
         kind: 'otp',
@@ -115,7 +124,13 @@ export function makeSendMailOTPv1(deps = {}) {
       });
     } catch (err) {
       console.log(`SendOTPMailV1 relay error: ${err?.message} (status ${err?.status})`);
-      throw new Parse.Error(Parse.Error.SCRIPT_FAILED, 'The OTP email could not be sent.');
+      if (err?.uncertain === false) {
+        try { await rollback(reservation); }
+        catch (rollbackError) { console.error('SendOTPMailV1 OTP rollback failed', rollbackError); }
+      }
+      // Without a document, an error would expose whether this address exists.
+      if (!docId) return 'Otp send';
+      throw new Parse.Error(Parse.Error.SCRIPT_FAILED, 'The OTP email could not be sent. Please wait one minute before retrying if the code does not arrive.');
     }
     if (extUserId) {
       countMail(extUserId);

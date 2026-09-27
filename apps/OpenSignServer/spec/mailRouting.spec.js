@@ -312,4 +312,27 @@ describe('SendOTPMailV1', () => {
     const { handler } = deps({ doc, fail: true });
     await expectAsync(handler({ params: { email: 'signer@x.test', docId: 'doc1' } })).toBeRejected();
   });
+
+  it('keeps no-document rate-limit responses uniform for known and unknown addresses', async () => {
+    const handler = makeSendMailOTPv1({
+      relay: async () => { throw new Error('must not relay'); },
+      userExists: async email => email === 'known@x.test',
+      storeOtp: async () => { throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'limit'); },
+    });
+    spyOn(console, 'log');
+    expect(await handler({ params: { email: 'known@x.test' } })).toBe('Otp send');
+    expect(await handler({ params: { email: 'unknown@x.test' } })).toBe('Otp send');
+  });
+
+  it('keeps no-document relay-failure responses uniform for known and unknown addresses', async () => {
+    const handler = makeSendMailOTPv1({
+      relay: async () => { throw Object.assign(new Error('refused'), { uncertain: false }); },
+      userExists: async email => email === 'known@x.test',
+      storeOtp: async () => ({ reserved: true }),
+      rollback: async reservation => { expect(reservation).toEqual({ reserved: true }); },
+    });
+    spyOn(console, 'log');
+    expect(await handler({ params: { email: 'known@x.test' } })).toBe('Otp send');
+    expect(await handler({ params: { email: 'unknown@x.test' } })).toBe('Otp send');
+  });
 });

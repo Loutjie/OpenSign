@@ -13,7 +13,6 @@ function VerifyEmail(props) {
         {props.isVerifyModal ? (
           <form
             onSubmit={(e) => {
-              props.setIsVerifyModal(false);
               props.handleVerifyEmail(e);
             }}
           >
