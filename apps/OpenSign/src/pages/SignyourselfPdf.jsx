@@ -478,9 +478,14 @@ function SignYourSelf() {
   const handleResend = async (e) => {
     e.preventDefault();
     setOtpLoader(true);
-    await handleSendOTP(Parse.User.current().getEmail());
-    setOtpLoader(false);
-    alert(t("otp-sent-alert"));
+    try {
+      await handleSendOTP(Parse.User.current().getEmail());
+      alert(t("otp-sent-alert"));
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setOtpLoader(false);
+    }
   };
   //`handleVerifyEmail` function is used to verify email with otp
   const handleVerifyEmail = async (e) => {
@@ -510,7 +515,8 @@ function SignYourSelf() {
   //`handleVerifyBtn` function is used to send otp on user mail
   const handleVerifyBtn = async () => {
     setIsVerifyModal(true);
-    await handleSendOTP(Parse.User.current().getEmail());
+    try { await handleSendOTP(Parse.User.current().getEmail()); }
+    catch (error) { alert(error.message); }
   };
   useEffect(() => {
     const timer = setTimeout(() => {
