@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { cloudServerUrl, serverAppId } from '../../Utils.js';
-import { claimOtp } from './otpClaim.js';
+import { claimOtp, otpKey } from './otpClaim.js';
 
 // A code has six digits, but guesses must still be bounded: after
 // MAX_OTP_ATTEMPTS wrong codes the code is withdrawn (a new one must be requested) and
@@ -12,7 +12,7 @@ export const OTP_LOCKED_MESSAGE = 'Too many incorrect codes. Request a new code 
 // defaultdata_Otp {Email, OTP, ExpiresAt, FailedAttempts, LockedUntil, UsedAt}; SendMailOTPv1 writes the code
 // and resets FailedAttempts. The class is master-key only (accessGuards.js).
 export function parseOtpStore({ query = () => new Parse.Query('defaultdata_Otp') } = {}) {
-  const find = email => query().equalTo('Email', email).first({ useMasterKey: true });
+  const find = email => query().equalTo('objectId', otpKey(email)).first({ useMasterKey: true });
   return {
     async get(email) {
       const row = await find(email);
@@ -100,7 +100,10 @@ export function makeAuthLoginAsMail({
       if (claimed === null) return 'user not found!';
       if (!claimed) return 'Invalid Otp';
       const result = await login(email);
-      return result || 'user not found!';
+      if (!result) {
+        throw new Parse.Error(Parse.Error.SCRIPT_FAILED, 'Sign-in is temporarily unavailable. Request a new code.');
+      }
+      return result;
     } catch (err) {
       if (err instanceof Parse.Error) throw err;
       console.log('err in Auth', { message: err?.message });

@@ -1,13 +1,12 @@
-import { claimOtp } from '../cloud/parsefunction/otpClaim.js';
+import { claimOtp, otpKey, storeOtp } from '../cloud/parsefunction/otpClaim.js';
 
 describe('atomic OTP claim against the Parse Mongo collection', () => {
   it('allows one concurrent claim and never clears a replacement code', async () => {
-    const Otp = Parse.Object.extend('defaultdata_Otp');
     const email = 'atomic-otp@test.example';
     const now = new Date('2030-01-01T00:00:00Z');
-    const row = await new Otp().save({
-      Email: email, OTP: 123456, ExpiresAt: new Date('2030-01-01T00:10:00Z'), FailedAttempts: 0,
-    }, { useMasterKey: true });
+    await storeOtp(email, 123456, null, new Date('2030-01-01T00:10:00Z'));
+    const row = await new Parse.Query('defaultdata_Otp').equalTo('objectId', otpKey(email)).first({ useMasterKey: true });
+    expect(row?.get('OTP')).toBe(123456);
 
     const claims = await Promise.all([claimOtp(email, 123456, now), claimOtp(email, 123456, now)]);
     expect(claims.sort()).toEqual([false, true]);
@@ -23,5 +22,15 @@ describe('atomic OTP claim against the Parse Mongo collection', () => {
     saved = await new Parse.Query('defaultdata_Otp').get(row.id, { useMasterKey: true });
     expect(saved.get('OTP')).toBe(654321);
     expect(await claimOtp(email, 654321, now)).toBeTrue();
+  });
+
+  it('keeps one readable OTP row across parallel first sends', async () => {
+    const email = 'parallel-first-send@test.example';
+    const expiry = new Date('2030-01-01T00:10:00Z');
+    await Promise.all([storeOtp(email, 123456, null, expiry), storeOtp(email, 654321, null, expiry)]);
+    const rows = await new Parse.Query('defaultdata_Otp').equalTo('Email', email).find({ useMasterKey: true });
+    expect(rows.length).toBe(1);
+    expect(rows[0].id).toBe(otpKey(email));
+    expect([123456, 654321]).toContain(rows[0].get('OTP'));
   });
 });
