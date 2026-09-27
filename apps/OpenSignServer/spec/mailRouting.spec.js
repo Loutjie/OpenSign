@@ -241,6 +241,7 @@ describe('SendOTPMailV1', () => {
         userExists: async () => user,
         storeOtp: async (email, code, tenantId, expiresAt) => stored.push({ email, code, tenantId, expiresAt }),
         countMail: async () => {},
+        now: () => new Date('2030-01-01T00:00:00Z'),
       }),
     };
   }
@@ -259,7 +260,7 @@ describe('SendOTPMailV1', () => {
     expect(stored.length).toBe(1);
     expect(String(stored[0].code)).toMatch(/^\d{6}$/);
     expect(stored[0].expiresAt).toEqual(jasmine.any(Date));
-    expect(stored[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(stored[0].expiresAt.toISOString()).toBe('2030-01-01T00:10:00.000Z');
     expect(calls[0].subject).toContain('LeaseLynx');
     expect(calls[0].html).toContain(String(stored[0].code));
     expect(calls[0].html).toContain('10 minutes');

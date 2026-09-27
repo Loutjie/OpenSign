@@ -289,7 +289,7 @@ function GuestLogin() {
                   onInput={(e) => e.target.setCustomValidity("")}
                   required
                   type="tel"
-                  pattern="[0-9]{4}"
+                  pattern="[0-9]{6}"
                   className="w-full op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content text-xs"
                   placeholder={t("otp-placeholder")}
                   value={OTP}

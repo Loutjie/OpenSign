@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { cloudServerUrl, serverAppId } from '../../Utils.js';
+import { claimOtp } from './otpClaim.js';
 
 // A code has six digits, but guesses must still be bounded: after
 // MAX_OTP_ATTEMPTS wrong codes the code is withdrawn (a new one must be requested) and
@@ -8,7 +9,7 @@ export const MAX_OTP_ATTEMPTS = 5;
 export const OTP_LOCK_MS = 15 * 60 * 1000;
 export const OTP_LOCKED_MESSAGE = 'Too many incorrect codes. Request a new code in 15 minutes.';
 
-// defaultdata_Otp {Email, OTP, ExpiresAt, FailedAttempts, LockedUntil}; SendMailOTPv1 writes the code
+// defaultdata_Otp {Email, OTP, ExpiresAt, FailedAttempts, LockedUntil, UsedAt}; SendMailOTPv1 writes the code
 // and resets FailedAttempts. The class is master-key only (accessGuards.js).
 export function parseOtpStore({ query = () => new Parse.Query('defaultdata_Otp') } = {}) {
   const find = email => query().equalTo('Email', email).first({ useMasterKey: true });
@@ -33,14 +34,30 @@ export function parseOtpStore({ query = () => new Parse.Query('defaultdata_Otp')
       row.set('LockedUntil', until);
       await row.save(null, { useMasterKey: true });
     },
-    async consume(email) {
-      const row = await find(email);
-      row.unset('OTP');
-      row.set('UsedAt', new Date());
-      row.set('FailedAttempts', 0);
-      await row.save(null, { useMasterKey: true });
-    },
+    claim: claimOtp,
   };
+}
+
+export async function verifyAndConsumeOtp(store, email, suppliedOtp, now = () => new Date()) {
+  const entry = await store.get(email);
+  if (!entry) return null;
+  if (entry.lockedUntil && entry.lockedUntil > now()) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, OTP_LOCKED_MESSAGE);
+  }
+  if (!entry.expiresAt || entry.expiresAt <= now() || entry.otp == null) return false;
+  const attempt = await store.countAttempt(email);
+  if (attempt > MAX_OTP_ATTEMPTS) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, OTP_LOCKED_MESSAGE);
+  }
+  const supplied = String(suppliedOtp ?? '');
+  if (!/^\d{6}$/.test(supplied) || entry.otp !== Number(supplied)) {
+    if (attempt >= MAX_OTP_ATTEMPTS) {
+      await store.lock(email, new Date(now().getTime() + OTP_LOCK_MS));
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, OTP_LOCKED_MESSAGE);
+    }
+    return false;
+  }
+  return store.claim(email, Number(supplied), now());
 }
 
 // Logs the user in by objectId (Parse's loginAs, master key) without touching the password.
@@ -77,28 +94,11 @@ export function makeAuthLoginAsMail({
   now = () => new Date(),
 } = {}) {
   return async function AuthLoginAsMail(request) {
-    const otp = parseInt(request.params.otp);
     const email = request.params.email;
     try {
-      const entry = await store.get(email);
-      if (!entry) return 'user not found!';
-      if (entry.lockedUntil && entry.lockedUntil > now()) {
-        throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, OTP_LOCKED_MESSAGE);
-      }
-      if (!entry.expiresAt || entry.expiresAt <= now()) return 'Invalid Otp';
-      // Count the try before checking it, so concurrent guesses cannot get past the limit.
-      const attempt = await store.countAttempt(email);
-      if (attempt > MAX_OTP_ATTEMPTS) {
-        throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, OTP_LOCKED_MESSAGE);
-      }
-      if (entry.otp === undefined || entry.otp === null || entry.otp !== otp) {
-        if (attempt >= MAX_OTP_ATTEMPTS) {
-          await store.lock(email, new Date(now().getTime() + OTP_LOCK_MS));
-          throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, OTP_LOCKED_MESSAGE);
-        }
-        return 'Invalid Otp';
-      }
-      await store.consume(email);
+      const claimed = await verifyAndConsumeOtp(store, email, request.params.otp, now);
+      if (claimed === null) return 'user not found!';
+      if (!claimed) return 'Invalid Otp';
       const result = await login(email);
       return result || 'user not found!';
     } catch (err) {

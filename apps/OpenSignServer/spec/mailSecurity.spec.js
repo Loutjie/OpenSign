@@ -27,7 +27,7 @@ import {
   MAX_OTP_ATTEMPTS,
   OTP_LOCK_MS,
 } from '../cloud/parsefunction/AuthLoginAsMail.js';
-import VerifyEmail from '../cloud/parsefunction/VerifyEmail.js';
+import VerifyEmail, { makeVerifyEmail } from '../cloud/parsefunction/VerifyEmail.js';
 
 globalThis.Parse ??= ParseSDK;
 const FORBIDDEN = ParseSDK.Error.OPERATION_FORBIDDEN;
@@ -296,72 +296,127 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
   let clock;
   const setup = () => {
     clock = new Date('2026-09-24T10:00:00Z');
-    const table = new FakeTable([{ objectId: 'o1', Email: 'signer@x.test', OTP: 4321, ExpiresAt: new Date('2026-09-24T10:10:00Z'), FailedAttempts: 0 }]);
+    const table = new FakeTable([{ objectId: 'o1', Email: 'signer@x.test', OTP: 432123, ExpiresAt: new Date('2026-09-24T10:10:00Z'), FailedAttempts: 0 }]);
     const logins = [];
+    const store = parseOtpStore({ query: () => table.query() });
+    store.claim = async (email, code, now) => {
+      const row = table.rows.find(item => item.Email === email && item.OTP === code && item.ExpiresAt > now && (!item.LockedUntil || item.LockedUntil <= now));
+      if (!row) return false;
+      delete row.OTP;
+      row.UsedAt = now;
+      row.FailedAttempts = 0;
+      return true;
+    };
     const handler = makeAuthLoginAsMail({
-      store: parseOtpStore({ query: () => table.query() }),
+      store,
       login: async email => { logins.push(email); return { sessionToken: 'r:ok' }; },
       now: () => clock,
     });
     const attempt = otp => handler({ params: { email: 'signer@x.test', otp: String(otp) } });
-    return { table, logins, attempt };
+    return { table, logins, attempt, store };
   };
 
   it('logs in with the right code', async () => {
     const { attempt, logins, table } = setup();
-    expect(await attempt(4321)).toEqual({ sessionToken: 'r:ok' });
+    expect(await attempt(432123)).toEqual({ sessionToken: 'r:ok' });
     expect(logins).toEqual(['signer@x.test']);
     expect(table.rows[0].OTP).toBeUndefined();
     expect(table.rows[0].UsedAt).toEqual(jasmine.any(Date));
-    expect(await attempt(4321)).toBe('Invalid Otp');
+    expect(await attempt(432123)).toBe('Invalid Otp');
     expect(logins).toEqual(['signer@x.test']);
   });
   it('refuses an expired code without logging in', async () => {
     const { attempt, logins, table } = setup();
     clock = new Date(table.rows[0].ExpiresAt);
-    expect(await attempt(4321)).toBe('Invalid Otp');
+    expect(await attempt(432123)).toBe('Invalid Otp');
     expect(logins).toEqual([]);
   });
   it('after 5 wrong codes withdraws the code and refuses even the right one for 15 minutes', async () => {
     const { attempt, logins, table } = setup();
-    for (let i = 1; i < MAX_OTP_ATTEMPTS; i++) expect(await attempt(1111)).toBe('Invalid Otp');
-    expect((await rejection(attempt(1111)))?.code).withContext('5th wrong code').toBe(FORBIDDEN);
+    for (let i = 1; i < MAX_OTP_ATTEMPTS; i++) expect(await attempt(111111)).toBe('Invalid Otp');
+    expect((await rejection(attempt(111111)))?.code).withContext('5th wrong code').toBe(FORBIDDEN);
     expect(table.rows[0].OTP).withContext('code withdrawn').toBeUndefined();
-    expect((await rejection(attempt(4321)))?.code).withContext('right code while locked').toBe(FORBIDDEN);
+    expect((await rejection(attempt(432123)))?.code).withContext('right code while locked').toBe(FORBIDDEN);
     clock = new Date(clock.getTime() + OTP_LOCK_MS + 1000);
-    expect(await attempt(4321)).withContext('old code after the lock: a new one is needed').toBe('Invalid Otp');
+    expect(await attempt(432123)).withContext('old code after the lock: a new one is needed').toBe('Invalid Otp');
     expect(logins).toEqual([]);
   });
   // SendMailOTPv1 resets FailedAttempts with every new code, so only LockedUntil stops a
   // guesser from requesting code after code and trying 5 guesses on each.
   it('refuses even a newly requested code while the 15-minute lock lasts', async () => {
     const { attempt, logins, table } = setup();
-    for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(1111));
+    for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(111111));
     clock = new Date(clock.getTime() + OTP_LOCK_MS - 60 * 1000);
-    Object.assign(table.rows[0], { OTP: 9876, ExpiresAt: new Date(clock.getTime() + 10 * 60 * 1000), FailedAttempts: 0 });
-    expect((await rejection(attempt(9876)))?.code).toBe(FORBIDDEN);
+    Object.assign(table.rows[0], { OTP: 987654, ExpiresAt: new Date(clock.getTime() + 10 * 60 * 1000), FailedAttempts: 0 });
+    expect((await rejection(attempt(987654)))?.code).toBe(FORBIDDEN);
     expect(logins).toEqual([]);
   });
   it('a new code after the lock works again (SendMailOTPv1 resets FailedAttempts)', async () => {
     const { attempt, table } = setup();
-    for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(1111));
+    for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(111111));
     clock = new Date(clock.getTime() + OTP_LOCK_MS + 1000);
-    Object.assign(table.rows[0], { OTP: 9876, ExpiresAt: new Date(clock.getTime() + 10 * 60 * 1000), FailedAttempts: 0 });
-    expect(await attempt(9876)).toEqual({ sessionToken: 'r:ok' });
+    Object.assign(table.rows[0], { OTP: 987654, ExpiresAt: new Date(clock.getTime() + 10 * 60 * 1000), FailedAttempts: 0 });
+    expect(await attempt(987654)).toEqual({ sessionToken: 'r:ok' });
   });
   it('counts every try before checking it, so concurrent guesses cannot exceed the limit', async () => {
     const { attempt, logins } = setup();
-    const results = await Promise.all(Array.from({ length: 20 }, (_, i) => rejection(attempt(i === 19 ? 4321 : 1000 + i))));
+    const results = await Promise.all(Array.from({ length: 20 }, (_, i) => rejection(attempt(i === 19 ? 432123 : 100000 + i))));
     expect(results.filter(r => r === null).length).toBeLessThanOrEqual(MAX_OTP_ATTEMPTS);
     expect(logins).toEqual([]);
+  });
+  it('claims a correct code only once across concurrent requests', async () => {
+    const { attempt, logins } = setup();
+    const results = await Promise.all(Array.from({ length: 2 }, () => attempt(432123)));
+    expect(results.filter(result => result?.sessionToken === 'r:ok').length).toBe(1);
+    expect(logins).toEqual(['signer@x.test']);
   });
 });
 
 describe('VerifyEmail OTP ownership', () => {
+  const setup = () => {
+    const clock = new Date('2026-09-24T10:00:00Z');
+    const row = { OTP: 123456, ExpiresAt: new Date('2026-09-24T10:10:00Z'), FailedAttempts: 0 };
+    const store = {
+      get: async () => ({ otp: row.OTP, expiresAt: row.ExpiresAt, lockedUntil: row.LockedUntil }),
+      countAttempt: async () => ++row.FailedAttempts,
+      lock: async (_email, until) => { delete row.OTP; row.LockedUntil = until; },
+      claim: async (_email, code, now) => {
+        if (row.OTP !== code || row.ExpiresAt <= now) return false;
+        delete row.OTP;
+        return true;
+      },
+    };
+    const saved = [];
+    const user = { set: (key, value) => saved.push([key, value]), save: async () => true };
+    const request = { user: { id: 'u1', get: key => key === 'email' ? 'owner@x.test' : false }, params: { email: 'owner@x.test', otp: '123456' } };
+    const verify = makeVerifyEmail({ store, now: () => clock, loadUser: async () => user });
+    return { row, saved, request, verify };
+  };
+
   it('refuses a code for a different email before querying it', async () => {
     const user = { get: key => key === 'email' ? 'owner@x.test' : undefined };
     const err = await rejection(VerifyEmail({ user, params: { email: 'other@x.test', otp: '123456' } }));
     expect(err?.code).toBe(FORBIDDEN);
+  });
+  it('verifies once with a live code and refuses its replay', async () => {
+    const { request, verify, saved } = setup();
+    expect(await verify(request)).toEqual({ message: 'Email is verified.' });
+    expect(saved).toEqual([['emailVerified', true]]);
+    expect((await rejection(verify(request)))?.code).toBe(400);
+    expect(saved.length).toBe(1);
+  });
+  it('refuses expired codes and locks after five wrong codes', async () => {
+    const expired = setup();
+    expired.row.ExpiresAt = new Date('2026-09-24T10:00:00Z');
+    expect((await rejection(expired.verify(expired.request)))?.code).toBe(400);
+    expect(expired.saved).toEqual([]);
+    const guess = setup();
+    guess.request.params.otp = '999999';
+    for (let i = 1; i < MAX_OTP_ATTEMPTS; i++) {
+      expect((await rejection(guess.verify(guess.request)))?.code).toBe(400);
+    }
+    expect((await rejection(guess.verify(guess.request)))?.code).toBe(FORBIDDEN);
+    expect(guess.row.OTP).toBeUndefined();
   });
 });
 

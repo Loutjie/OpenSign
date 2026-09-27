@@ -219,7 +219,8 @@ function UserProfile() {
   //`handleVerifyBtn` function is used to send otp on user mail
   const handleVerifyBtn = async () => {
     setIsVerifyModal(true);
-    await handleSendOTP(Parse.User.current().getEmail());
+    try { await handleSendOTP(Parse.User.current().getEmail()); }
+    catch (error) { alert(error.message); }
   };
   const handleCloseVerifyModal = async () => {
     setIsVerifyModal(false);
@@ -252,9 +253,14 @@ function UserProfile() {
   const handleResend = async (e) => {
     e.preventDefault();
     setOtpLoader(true);
-    await handleSendOTP(Parse.User.current().getEmail());
-    setOtpLoader(false);
-    alert(t("otp-sent-alert"));
+    try {
+      await handleSendOTP(Parse.User.current().getEmail());
+      alert(t("otp-sent-alert"));
+    } catch (error) {
+      alert(error.message);
+    } finally {
+      setOtpLoader(false);
+    }
   };
 
   const handleCancel = () => {
@@ -543,7 +549,7 @@ function UserProfile() {
                       onInput={(e) => e.target.setCustomValidity("")}
                       required
                       type="tel"
-                      pattern="[0-9]{4}"
+                      pattern="[0-9]{6}"
                       className="w-full op-input op-input-bordered op-input-sm focus:outline-none hover:border-base-content text-xs"
                       placeholder={t("otp-placeholder")}
                       value={otp}
