@@ -28,6 +28,7 @@ import {
   OTP_LOCK_MS,
 } from '../cloud/parsefunction/AuthLoginAsMail.js';
 import VerifyEmail, { makeVerifyEmail } from '../cloud/parsefunction/VerifyEmail.js';
+import { otpKey } from '../cloud/parsefunction/otpClaim.js';
 
 globalThis.Parse ??= ParseSDK;
 const FORBIDDEN = ParseSDK.Error.OPERATION_FORBIDDEN;
@@ -296,7 +297,7 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
   let clock;
   const setup = () => {
     clock = new Date('2026-09-24T10:00:00Z');
-    const table = new FakeTable([{ objectId: 'o1', Email: 'signer@x.test', OTP: 432123, ExpiresAt: new Date('2026-09-24T10:10:00Z'), FailedAttempts: 0 }]);
+    const table = new FakeTable([{ objectId: otpKey('signer@x.test'), Email: 'signer@x.test', OTP: 432123, ExpiresAt: new Date('2026-09-24T10:10:00Z'), FailedAttempts: 0 }]);
     const logins = [];
     const store = parseOtpStore({ query: () => table.query() });
     store.claim = async (email, code, now) => {
@@ -369,6 +370,15 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
     const results = await Promise.all(Array.from({ length: 2 }, () => attempt(432123)));
     expect(results.filter(result => result?.sessionToken === 'r:ok').length).toBe(1);
     expect(logins).toEqual(['signer@x.test']);
+  });
+  it('explains a failed sign-in after the code was consumed', async () => {
+    const { attempt, store, table } = setup();
+    const handler = makeAuthLoginAsMail({ store, login: async () => null, now: () => clock });
+    const err = await rejection(handler({ params: { email: 'signer@x.test', otp: '432123' } }));
+    expect(err?.code).toBe(Parse.Error.SCRIPT_FAILED);
+    expect(err?.message).toContain('Request a new code');
+    expect(table.rows[0].OTP).toBeUndefined();
+    expect(await attempt(432123)).toBe('Invalid Otp');
   });
 });
 

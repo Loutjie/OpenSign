@@ -2,6 +2,7 @@ import { appName, updateMailCount } from '../../Utils.js';
 import { relayMail } from '../../leaselynxRelay.js';
 import { randomInt } from 'node:crypto';
 import { OTP_TTL_MS } from './otpPolicy.js';
+import { storeOtp } from './otpClaim.js';
 
 const normalise = email =>
   String(email || '')
@@ -21,30 +22,6 @@ export async function userExists(email, { query: newQuery = () => new Parse.Quer
   const query = newQuery();
   query.containedIn('username', [...new Set([email, normalise(email)])]);
   return !!(await query.first({ useMasterKey: true }));
-}
-
-async function storeOtp(email, code, TenantId, expiresAt) {
-  const tempOtp = new Parse.Query('defaultdata_Otp');
-  tempOtp.equalTo('Email', email);
-  const resultOTP = await tempOtp.first({ useMasterKey: true });
-  // A new code starts a new count of wrong attempts (AuthLoginAsMail); an active lock
-  // (LockedUntil) is left in place.
-  if (resultOTP !== undefined) {
-    resultOTP.set('OTP', code);
-    resultOTP.set('ExpiresAt', expiresAt);
-    resultOTP.unset('UsedAt');
-    resultOTP.set('FailedAttempts', 0);
-    await resultOTP.save(null, { useMasterKey: true });
-  } else {
-    const otpClass = Parse.Object.extend('defaultdata_Otp');
-    const newOtpQuery = new otpClass();
-    newOtpQuery.set('OTP', code);
-    newOtpQuery.set('ExpiresAt', expiresAt);
-    newOtpQuery.set('FailedAttempts', 0);
-    newOtpQuery.set('Email', email);
-    newOtpQuery.set('TenantId', TenantId);
-    await newOtpQuery.save(null, { useMasterKey: true });
-  }
 }
 
 // A signer of the document: a linked contact (`Signers[].Email`) or a role filled by email
