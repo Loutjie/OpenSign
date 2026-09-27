@@ -6,3 +6,13 @@ apps/OpenSign/node_modules
 apps/OpenSignServer/node_modules
 apps/OpenSign/build
 cert
+# Cloud Build receives this source archive before Docker applies .dockerignore.
+# Never upload developer configuration or installed packages.
+**/.env
+**/.env.*
+**/node_modules
+**/node_modules/**
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key

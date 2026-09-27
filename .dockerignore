@@ -1,0 +1,13 @@
+.git
+.gcloudignore
+.dockerignore
+cert
+**/.env
+**/.env.*
+**/node_modules
+**/node_modules/**
+**/npm-debug.log
+**/*.pfx
+**/*.p12
+**/*.pem
+**/*.key
