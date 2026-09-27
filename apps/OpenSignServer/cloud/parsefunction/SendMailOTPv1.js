@@ -1,5 +1,7 @@
 import { appName, updateMailCount } from '../../Utils.js';
 import { relayMail } from '../../leaselynxRelay.js';
+import { randomInt } from 'node:crypto';
+import { OTP_TTL_MS } from './otpPolicy.js';
 
 const normalise = email =>
   String(email || '')
@@ -21,7 +23,7 @@ export async function userExists(email, { query: newQuery = () => new Parse.Quer
   return !!(await query.first({ useMasterKey: true }));
 }
 
-async function storeOtp(email, code, TenantId) {
+async function storeOtp(email, code, TenantId, expiresAt) {
   const tempOtp = new Parse.Query('defaultdata_Otp');
   tempOtp.equalTo('Email', email);
   const resultOTP = await tempOtp.first({ useMasterKey: true });
@@ -29,12 +31,15 @@ async function storeOtp(email, code, TenantId) {
   // (LockedUntil) is left in place.
   if (resultOTP !== undefined) {
     resultOTP.set('OTP', code);
+    resultOTP.set('ExpiresAt', expiresAt);
+    resultOTP.unset('UsedAt');
     resultOTP.set('FailedAttempts', 0);
     await resultOTP.save(null, { useMasterKey: true });
   } else {
     const otpClass = Parse.Object.extend('defaultdata_Otp');
     const newOtpQuery = new otpClass();
     newOtpQuery.set('OTP', code);
+    newOtpQuery.set('ExpiresAt', expiresAt);
     newOtpQuery.set('FailedAttempts', 0);
     newOtpQuery.set('Email', email);
     newOtpQuery.set('TenantId', TenantId);
@@ -64,12 +69,14 @@ function otpHtml(AppName, code) {
     `<img src="https://leaselynx.co.za/logo-LeaseLynx.png" height="110" alt="LeaseLynx" style="display:block;"/>` +
     `</div>` +
     `<div style="padding:36px 40px;">` +
-    `<p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#2563eb;">OTP VERIFICATION</p>` +
-    `<h1 style="margin:0 0 6px;font-size:22px;font-weight:700;color:#ffffff;">One-Time Password</h1>` +
-    `<p style="margin:0 0 28px;font-size:14px;color:#94a3b8;">Your OTP for ${AppName} verification is:</p>` +
-    `<p style="margin:0 0 28px;font-size:48px;font-weight:800;color:#ffffff;letter-spacing:8px;text-align:center;">` +
+    `<p style="margin:0 0 8px;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:#fb923c;">LEASELYNX SIGNING</p>` +
+    `<h1 style="margin:0 0 12px;font-size:22px;font-weight:700;color:#ffffff;">Your verification code</h1>` +
+    `<p style="margin:0 0 28px;font-size:14px;line-height:1.6;color:#cbd5e1;">Enter this code to continue securely in ${AppName}.</p>` +
+    `<p style="margin:0 0 28px;font-size:42px;font-weight:800;color:#fb923c;letter-spacing:7px;text-align:center;">` +
     code +
     `</p>` +
+    `<p style="margin:0 0 10px;font-size:13px;line-height:1.5;color:#cbd5e1;">The code expires in 10 minutes and can be used once.</p>` +
+    `<p style="margin:0;font-size:13px;line-height:1.5;color:#94a3b8;">If you did not request it, ignore this email. Never share the code with anyone.</p>` +
     `</div>` +
     `<div style="border-top:1px solid rgba(255,255,255,0.06);padding:18px 40px;background:#080f1e;">` +
     `<p style="margin:0;font-size:12px;color:#334155;">Sent via <strong style="color:#475569;">LeaseLynx</strong> &middot; <a href="mailto:support@leaselynx.co.za?subject=Spam%20report" style="color:#334155;text-decoration:none;">Report spam</a></p>` +
@@ -85,6 +92,7 @@ export function makeSendMailOTPv1(deps = {}) {
     userExists: isUser = userExists,
     storeOtp: saveOtp = storeOtp,
     countMail = updateMailCount,
+    now = () => new Date(),
   } = deps;
   return async function sendMailOTPv1(request) {
     const email = request.params.email;
@@ -112,11 +120,11 @@ export function makeSendMailOTPv1(deps = {}) {
       return 'Otp send';
     }
 
-    const code = Math.floor(1000 + Math.random() * 9000);
+    const code = randomInt(100000, 1000000);
     const extUserId = doc?.ExtUserPtr?.objectId || null;
     // Stored before it is sent: a stored code nobody received is harmless, a received
     // code that was never stored cannot be used.
-    await saveOtp(email, code, TenantId);
+    await saveOtp(email, code, TenantId, new Date(now().getTime() + OTP_TTL_MS));
     try {
       await relay({
         kind: 'otp',
@@ -124,9 +132,9 @@ export function makeSendMailOTPv1(deps = {}) {
         extUserId,
         fromName: AppName,
         to: email,
-        subject: `Your ${AppName} OTP`,
+        subject: `Your ${AppName} verification code`,
         html: otpHtml(AppName, code),
-        text: 'otp email',
+        text: `Your ${AppName} verification code is ${code}. It expires in 10 minutes and can be used once. If you did not request it, ignore this email. Never share the code.`,
       });
     } catch (err) {
       console.log(`SendOTPMailV1 relay error: ${err?.message} (status ${err?.status})`);

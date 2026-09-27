@@ -6,14 +6,21 @@ export default async function VerifyEmail(request) {
       let otpN = request.params.otp;
       let otp = parseInt(otpN);
       let email = request.params.email;
+      if (String(email || '').trim().toLowerCase() !== String(request.user.get('email') || '').trim().toLowerCase()) {
+        throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'OTP email does not match the signed-in user.');
+      }
 
       //checking otp is correct or not which already save in defaultdata_Otp class
       const checkOtp = new Parse.Query('defaultdata_Otp');
       checkOtp.equalTo('Email', email);
       checkOtp.equalTo('OTP', otp);
+      checkOtp.greaterThan('ExpiresAt', new Date());
 
       const res = await checkOtp.first({ useMasterKey: true });
       if (res) {
+        res.unset('OTP');
+        res.set('UsedAt', new Date());
+        await res.save(null, { useMasterKey: true });
         // Fetch the user by their objectId
         const isEmailVerified = request?.user?.get('emailVerified');
         if (isEmailVerified) {
