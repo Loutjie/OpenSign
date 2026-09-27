@@ -9,8 +9,8 @@ export const MAX_OTP_ATTEMPTS = 5;
 export const OTP_LOCK_MS = 15 * 60 * 1000;
 export const OTP_LOCKED_MESSAGE = 'Too many incorrect codes. Request a new code in 15 minutes.';
 
-// defaultdata_Otp {Email, OTP, ExpiresAt, FailedAttempts, LockedUntil, UsedAt}; SendMailOTPv1 writes the code
-// and resets FailedAttempts. The class is master-key only (accessGuards.js).
+// defaultdata_Otp {Email, OTP, ExpiresAt, FailedAttempts, LockedUntil, UsedAt};
+// resends preserve failed attempts until a lock expires. The class is master-key only.
 export function parseOtpStore({ query = () => new Parse.Query('defaultdata_Otp') } = {}) {
   const find = email => query().equalTo('objectId', otpKey(email)).first({ useMasterKey: true });
   return {
@@ -27,7 +27,7 @@ export function parseOtpStore({ query = () => new Parse.Query('defaultdata_Otp')
       return Number(row.get('FailedAttempts')) || 0;
     },
     // Withdraws the code. FailedAttempts stays at the limit, so a try that raced past the
-    // lock is still refused; SendMailOTPv1 resets it with the next code.
+    // lock is still refused; only a resend after the lock expires resets it.
     async lock(email, until) {
       const row = await find(email);
       row.unset('OTP');
