@@ -27,6 +27,7 @@ import {
   MAX_OTP_ATTEMPTS,
   OTP_LOCK_MS,
 } from '../cloud/parsefunction/AuthLoginAsMail.js';
+import VerifyEmail from '../cloud/parsefunction/VerifyEmail.js';
 
 globalThis.Parse ??= ParseSDK;
 const FORBIDDEN = ParseSDK.Error.OPERATION_FORBIDDEN;
@@ -295,7 +296,7 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
   let clock;
   const setup = () => {
     clock = new Date('2026-09-24T10:00:00Z');
-    const table = new FakeTable([{ objectId: 'o1', Email: 'signer@x.test', OTP: 4321, FailedAttempts: 0 }]);
+    const table = new FakeTable([{ objectId: 'o1', Email: 'signer@x.test', OTP: 4321, ExpiresAt: new Date('2026-09-24T10:10:00Z'), FailedAttempts: 0 }]);
     const logins = [];
     const handler = makeAuthLoginAsMail({
       store: parseOtpStore({ query: () => table.query() }),
@@ -307,9 +308,19 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
   };
 
   it('logs in with the right code', async () => {
-    const { attempt, logins } = setup();
+    const { attempt, logins, table } = setup();
     expect(await attempt(4321)).toEqual({ sessionToken: 'r:ok' });
     expect(logins).toEqual(['signer@x.test']);
+    expect(table.rows[0].OTP).toBeUndefined();
+    expect(table.rows[0].UsedAt).toEqual(jasmine.any(Date));
+    expect(await attempt(4321)).toBe('Invalid Otp');
+    expect(logins).toEqual(['signer@x.test']);
+  });
+  it('refuses an expired code without logging in', async () => {
+    const { attempt, logins, table } = setup();
+    clock = new Date(table.rows[0].ExpiresAt);
+    expect(await attempt(4321)).toBe('Invalid Otp');
+    expect(logins).toEqual([]);
   });
   it('after 5 wrong codes withdraws the code and refuses even the right one for 15 minutes', async () => {
     const { attempt, logins, table } = setup();
@@ -318,7 +329,7 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
     expect(table.rows[0].OTP).withContext('code withdrawn').toBeUndefined();
     expect((await rejection(attempt(4321)))?.code).withContext('right code while locked').toBe(FORBIDDEN);
     clock = new Date(clock.getTime() + OTP_LOCK_MS + 1000);
-    expect((await rejection(attempt(4321)))?.code).withContext('old code after the lock: a new one is needed').toBe(FORBIDDEN);
+    expect(await attempt(4321)).withContext('old code after the lock: a new one is needed').toBe('Invalid Otp');
     expect(logins).toEqual([]);
   });
   // SendMailOTPv1 resets FailedAttempts with every new code, so only LockedUntil stops a
@@ -327,7 +338,7 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
     const { attempt, logins, table } = setup();
     for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(1111));
     clock = new Date(clock.getTime() + OTP_LOCK_MS - 60 * 1000);
-    Object.assign(table.rows[0], { OTP: 9876, FailedAttempts: 0 });
+    Object.assign(table.rows[0], { OTP: 9876, ExpiresAt: new Date(clock.getTime() + 10 * 60 * 1000), FailedAttempts: 0 });
     expect((await rejection(attempt(9876)))?.code).toBe(FORBIDDEN);
     expect(logins).toEqual([]);
   });
@@ -335,7 +346,7 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
     const { attempt, table } = setup();
     for (let i = 0; i < MAX_OTP_ATTEMPTS; i++) await rejection(attempt(1111));
     clock = new Date(clock.getTime() + OTP_LOCK_MS + 1000);
-    Object.assign(table.rows[0], { OTP: 9876, FailedAttempts: 0 });
+    Object.assign(table.rows[0], { OTP: 9876, ExpiresAt: new Date(clock.getTime() + 10 * 60 * 1000), FailedAttempts: 0 });
     expect(await attempt(9876)).toEqual({ sessionToken: 'r:ok' });
   });
   it('counts every try before checking it, so concurrent guesses cannot exceed the limit', async () => {
@@ -343,6 +354,14 @@ describe('A4 OTP attempt limit (AuthLoginAsMail)', () => {
     const results = await Promise.all(Array.from({ length: 20 }, (_, i) => rejection(attempt(i === 19 ? 4321 : 1000 + i))));
     expect(results.filter(r => r === null).length).toBeLessThanOrEqual(MAX_OTP_ATTEMPTS);
     expect(logins).toEqual([]);
+  });
+});
+
+describe('VerifyEmail OTP ownership', () => {
+  it('refuses a code for a different email before querying it', async () => {
+    const user = { get: key => key === 'email' ? 'owner@x.test' : undefined };
+    const err = await rejection(VerifyEmail({ user, params: { email: 'other@x.test', otp: '123456' } }));
+    expect(err?.code).toBe(FORBIDDEN);
   });
 });
 

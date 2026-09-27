@@ -239,7 +239,7 @@ describe('SendOTPMailV1', () => {
         relay,
         loadDocument: async () => doc,
         userExists: async () => user,
-        storeOtp: async (email, code) => stored.push({ email, code }),
+        storeOtp: async (email, code, tenantId, expiresAt) => stored.push({ email, code, tenantId, expiresAt }),
         countMail: async () => {},
       }),
     };
@@ -257,7 +257,13 @@ describe('SendOTPMailV1', () => {
     expect(calls.length).toBe(1);
     expect(calls[0]).toEqual(jasmine.objectContaining({ kind: 'otp', documentId: 'doc1', to: 'signer@x.test' }));
     expect(stored.length).toBe(1);
+    expect(String(stored[0].code)).toMatch(/^\d{6}$/);
+    expect(stored[0].expiresAt).toEqual(jasmine.any(Date));
+    expect(stored[0].expiresAt.getTime()).toBeGreaterThan(Date.now());
+    expect(calls[0].subject).toContain('LeaseLynx');
     expect(calls[0].html).toContain(String(stored[0].code));
+    expect(calls[0].html).toContain('10 minutes');
+    expect(calls[0].text).toContain(String(stored[0].code));
   });
 
   it('sends to an email listed only in Placeholders', async () => {
