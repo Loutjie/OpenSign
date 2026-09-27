@@ -168,11 +168,16 @@ export async function getSignedUrl(request) {
       if (!isAuth) {
         throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
       } else {
+        // The client supplies a document or template ID for every bucket read.
+        // A session by itself cannot authorize an arbitrary object key.
+        if (!isLocalStorage()) {
+          throw new Parse.Error(
+            Parse.Error.OPERATION_FORBIDDEN,
+            'A document or template is required to access stored files.'
+          );
+        }
         if (isLocalParseFileUrl(url, process.env.SERVER_URL)) {
           return presignedlocalUrl(url);
-        } else if (!isLocalStorage()) {
-          const presignedUrl = await getPresignedUrl(url);
-          return presignedUrl;
         } else {
           return url;
         }
