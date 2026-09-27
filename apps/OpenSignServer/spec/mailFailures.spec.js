@@ -454,7 +454,7 @@ describe('B6 relayMail answers', () => {
 
 describe('B7 SendOTPMailV1', () => {
   const doc = { objectId: 'doc1', Signers: [{ Email: 'signer@x.test' }] };
-  it('stores the code before relaying it, so a relay failure leaves a stored (harmless) code', async () => {
+  it('stores the code before relaying it, and retains it after an uncertain failure', async () => {
     const events = [];
     const handler = makeSendMailOTPv1({
       relay: async () => { events.push('relay'); throw new RelayError('down'); },
