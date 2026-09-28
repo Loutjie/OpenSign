@@ -216,8 +216,8 @@ if (!process.env.TESTING) {
     await server.start();
     app.use(mountPath, server.app);
   } catch (err) {
-    console.log(err);
-    process.exit();
+    console.error('FATAL: Parse Server failed to start.', err);
+    process.exit(1);
   }
 }
 // Mount your custom express app
