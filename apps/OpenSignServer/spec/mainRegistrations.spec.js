@@ -2,11 +2,18 @@
 // Re-import the entry module with a fresh URL so its top-level registrations run
 // even when ParseServer has already loaded main.js during test setup.
 import ParseSDK from 'parse/node';
+import { config } from '../index.js';
 import { rejectSelfSignup, requireMasterKey } from '../cloud/parsefunction/accessGuards.js';
 
 globalThis.Parse ??= ParseSDK;
 
 describe('cloud/main.js registrations', () => {
+  it('awaits Cloud Code registration before Parse Server finishes startup', async () => {
+    const startup = config.cloud();
+    expect(startup?.then).toEqual(jasmine.any(Function));
+    await startup;
+  });
+
   const calls = [];
   beforeAll(async () => {
     const saved = { ...Parse.Cloud };

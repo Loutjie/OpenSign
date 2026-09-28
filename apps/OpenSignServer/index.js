@@ -78,8 +78,8 @@ const isMailAdapter = !!process.env.LEASELYNX_MAIL_RELAY_URL;
 export const config = {
   databaseURI:
     process.env.DATABASE_URI || process.env.MONGODB_URI || 'mongodb://localhost:27017/dev',
-  cloud: function () {
-    import('./cloud/main.js');
+  cloud: async function () {
+    await import('./cloud/main.js');
   },
   appId: serverAppId,
   logLevel: ['error'],
