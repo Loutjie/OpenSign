@@ -268,20 +268,17 @@ describe('stored file signing (S3-mode env)', () => {
       ).toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OBJECT_NOT_FOUND }));
     });
 
-    it("signs a template's own file and refuses a foreign key (templateId)", async () => {
+    // A template's files need a session that can read it; signing for its owner and
+    // refusing a foreign key are in getSignedUrlRecord.spec.js (over REST, with sessions).
+    it('refuses a template read with no session (templateId)', async () => {
       const Template = Parse.Object.extend('contracts_Template');
       const template = await new Template().save(
         { URL: PATH_URL, Name: 'spec template' },
         { useMasterKey: true }
       );
-      const own = await Parse.Cloud.run('getsignedurl', { url: PATH_URL, templateId: template.id });
-      expect(new URL(own).searchParams.get('X-Amz-Signature')).toMatch(/^[0-9a-f]{64}$/);
       await expectAsync(
-        Parse.Cloud.run('getsignedurl', {
-          url: `${ENDPOINT}/${BUCKET}/someone_elses.pdf`,
-          templateId: template.id,
-        })
-      ).toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN }));
+        Parse.Cloud.run('getsignedurl', { url: PATH_URL, templateId: template.id })
+      ).toBeRejectedWith(jasmine.objectContaining({ code: Parse.Error.INVALID_SESSION_TOKEN }));
     });
   });
 
@@ -381,8 +378,12 @@ describe('stored file signing (S3-mode env)', () => {
     it('fileupload and getsignedurl refuse to mint a local-file token when useLocal !== "true"', async () => {
       const local = `${SERVER}/files/opensign/${KEY}`;
       await expectAsync(Parse.Cloud.run('fileupload', { url: local })).toBeRejectedWith(forbidden);
+      // A document that references the local file, so the refusal is the S3-mode one and
+      // not the unknown-document one.
+      const Doc = Parse.Object.extend('contracts_Document');
+      const doc = await new Doc().save({ URL: local, Name: 'legacy local' }, { useMasterKey: true });
       await expectAsync(
-        Parse.Cloud.run('getsignedurl', { url: local, docId: 'x' })
+        Parse.Cloud.run('getsignedurl', { url: local, docId: doc.id })
       ).toBeRejectedWith(forbidden);
     });
 
