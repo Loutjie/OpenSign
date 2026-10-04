@@ -192,8 +192,8 @@ describe('sendDeleteUserMail', () => {
     const lookups = [];
     const send = makeSendDeleteUserMail({
       relay,
-      findUser: async (userId, callerId) => {
-        lookups.push([userId, callerId]);
+      findUser: async userId => {
+        lookups.push(userId);
         return account(role);
       },
     });
@@ -203,8 +203,8 @@ describe('sendDeleteUserMail', () => {
   it('mails the request to the account\'s own address, as delete_request', async () => {
     process.env.SERVER_URL = 'https://sign.example/app';
     const { calls, lookups, send } = make('contracts_Admin');
-    expect(await send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBe('mail sent.');
-    expect(lookups).toEqual([['u1', 'caller1']]);
+    expect(await send({ user: { id: 'u1' }, params: { userId: 'u1' } })).toBe('mail sent.');
+    expect(lookups).toEqual(['u1']);
     expect(calls.length).toBe(1);
     expect(calls[0]).toEqual(jasmine.objectContaining({ kind: 'delete_request', to: 'admin@x.test', extUserId: 'ext1' }));
     expect(calls[0].html).toContain('https://sign.example/delete-account/u1');
@@ -213,16 +213,25 @@ describe('sendDeleteUserMail', () => {
   it('sends nothing for an account that is not an admin', async () => {
     spyOn(console, 'log');
     const { calls, send } = make('contracts_User');
-    await expectAsync(send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBeRejectedWith(
+    await expectAsync(send({ user: { id: 'u1' }, params: { userId: 'u1' } })).toBeRejectedWith(
       jasmine.objectContaining({ code: Parse.Error.SCRIPT_FAILED })
     );
+    expect(calls).toEqual([]);
+  });
+
+  it('refuses another user\'s account before looking it up', async () => {
+    const { calls, lookups, send } = make('contracts_Admin');
+    await expectAsync(send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBeRejectedWith(
+      jasmine.objectContaining({ code: Parse.Error.OPERATION_FORBIDDEN })
+    );
+    expect(lookups).toEqual([]);
     expect(calls).toEqual([]);
   });
 
   it('fails visibly when the relay fails', async () => {
     spyOn(console, 'log');
     const { send } = make('contracts_Admin', { fail: true });
-    await expectAsync(send({ user: { id: 'caller1' }, params: { userId: 'u1' } })).toBeRejectedWith(
+    await expectAsync(send({ user: { id: 'u1' }, params: { userId: 'u1' } })).toBeRejectedWith(
       jasmine.objectContaining({ code: Parse.Error.SCRIPT_FAILED })
     );
   });
