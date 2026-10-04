@@ -104,6 +104,9 @@ export const makeSendDeleteUserMail = ({ relay = relayMail, findUser = findDelet
     return 'mail sent.';
   } catch (err) {
     console.log('Err in sending delete user email ', { message: err?.message, status: err?.status });
+    // A Parse error (not found, not an admin) keeps its code; a relay failure is
+    // SCRIPT_FAILED.
+    if (err instanceof Parse.Error) throw err;
     throw new Parse.Error(Parse.Error.SCRIPT_FAILED, err.message);
   }
 };
