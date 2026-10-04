@@ -5,21 +5,11 @@ export const errHtml = err => {
   return `<html><head><meta http-equiv="Content-Type" content="text/html;charset=UTF-8" /><title>Reset Password</title></head>
   <body><h1 style="color:#1a5fa0; margin-bottom:16px;">${err}</h1></body></html>`;
 };
-async function findDeleteTarget(userId, callerId) {
-  const userPointer = { __type: 'Pointer', className: '_User', objectId: userId };
-
-  const createdByPointer = { __type: 'Pointer', className: '_User', objectId: callerId };
-
-  const userCondition = new Parse.Query('contracts_Users');
-  userCondition.equalTo('UserId', userPointer);
-
-  const userAndCreatorCondition = new Parse.Query('contracts_Users');
-  userAndCreatorCondition.equalTo('UserId', userPointer);
-  userAndCreatorCondition.equalTo('CreatedBy', createdByPointer);
-
-  const mainQuery = Parse.Query.or(userCondition, userAndCreatorCondition);
-
-  return mainQuery.first({ useMasterKey: true });
+// The caller's own contracts_Users row.
+async function findDeleteTarget(userId) {
+  const query = new Parse.Query('contracts_Users');
+  query.equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: userId });
+  return query.first({ useMasterKey: true });
 }
 
 export const makeSendDeleteUserMail = ({ relay = relayMail, findUser = findDeleteTarget } = {}) => async req => {
@@ -27,13 +17,24 @@ export const makeSendDeleteUserMail = ({ relay = relayMail, findUser = findDelet
   if (!req.user) {
     throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
   }
+  const { userId } = req.params;
+  if (!userId) {
+    throw new Parse.Error(Parse.Error.INVALID_QUERY, 'Missing userId parameter.');
+  }
+  // #86: a user may ask to delete only their own account (the client sends
+  // Parse.User.current().id). The lookup used to match any account, so any signed-in user
+  // could have this mail sent to any admin.
+  if (userId !== req.user.id) {
+    throw new Parse.Error(
+      Parse.Error.OPERATION_FORBIDDEN,
+      'You can only request deletion of your own account.'
+    );
+  }
   try {
-    const { userId } = req.params;
-    if (!userId) {
-      throw new Parse.Error(Parse.Error.INVALID_QUERY, 'Missing userId parameter.');
+    const result = await findUser(userId);
+    if (!result) {
+      throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Account not found.');
     }
-
-    const result = await findUser(userId, req.user.id);
     const username = result.get('Email')?.toLowerCase()?.replace(/\s/g, '');
     const name = result?.get('Name') ? `<b>${result?.get('Name')}</b>` : '';
     const isAdmin = result?.get('UserRole') === 'contracts_Admin';
