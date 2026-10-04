@@ -427,6 +427,16 @@ describe('VerifyEmail OTP ownership', () => {
     expect((await rejection(guess.verify(guess.request)))?.code).toBe(FORBIDDEN);
     expect(guess.row.OTP).toBeUndefined();
   });
+  // #86: codes used to be four digits. A live row left by the old generator must not
+  // verify with its four-digit code, or the 10^4 guess space comes back.
+  it('refuses a four-digit code even when it matches a legacy four-digit row', async () => {
+    const legacy = setup();
+    legacy.row.OTP = 1234;
+    legacy.request.params.otp = '1234';
+    expect((await rejection(legacy.verify(legacy.request)))?.code).toBe(400);
+    expect(legacy.saved).toEqual([]);
+    expect(legacy.row.FailedAttempts).toBe(1);
+  });
 });
 
 // ─── D2: the real session-token lookup ─────────────────────────────────────
