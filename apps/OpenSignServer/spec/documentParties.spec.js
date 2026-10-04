@@ -97,6 +97,15 @@ describe('a signer cannot change who a document\'s parties are', () => {
     ['ExtUserPtr', () => pointer('contracts_Users', otherExtId)],
     // Taking ownership would let a second save change everything above.
     ['CreatedBy', () => pointer('_User', signer.id)],
+    // Where signing events (with the signed file's URL and signer details) are posted;
+    // LeaseLynx archives the lease from them.
+    ['WebhookUrl', () => `https://attacker-${tag}.example/hook`],
+    // Where the next signer's browser goes after signing.
+    ['RedirectUrl', () => `https://attacker-${tag}.example/phish`],
+    // The file every later party sees and signs; also what getsignedurl will sign (#112).
+    ['URL', () => `https://example.test/swapped-${tag}.pdf`],
+    ['SignedUrl', () => `https://example.test/swapped-${tag}.pdf`],
+    ['CertificateUrl', () => `https://example.test/swapped-cert-${tag}.pdf`],
   ]) {
     it(`refuses a signer changing ${field}`, async () => {
       const res = await putAs(signer, { [field]: value() });

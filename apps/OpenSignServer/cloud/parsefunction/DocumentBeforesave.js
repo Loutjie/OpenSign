@@ -4,13 +4,20 @@ import { normaliseEmail } from './mailGuard.js';
 
 const idOf = value => (value && (value.id || value.objectId)) || null;
 
-// Everything that decides who a document's parties are, and so who may be emailed about
-// it: mailGuard.js allows its Placeholders emails, its Signers and its owner (ExtUserPtr,
-// CreatedBy); the completion mail (pdf/PDF.js) also goes to its Bcc and SenderMail.
-// Widget positions and values inside Placeholders are not parties.
-export function documentParties(doc) {
+// Everything about a document that only its owner may change:
+// - who its parties are, and so who may be emailed about it: mailGuard.js allows its
+//   Placeholders emails, its Signers and its owner (ExtUserPtr, CreatedBy); the completion
+//   mail (pdf/PDF.js) also goes to its Bcc and SenderMail;
+// - where news of it goes: WebhookUrl receives every signing event (with the signed
+//   file's URL; LeaseLynx archives the lease from it), RedirectUrl is where each signer's
+//   browser goes after signing;
+// - its files: URL/SignedUrl is what every later party sees and signs, and what
+//   getsignedurl signs for anyone holding the document link (#112).
+// Widget positions and values inside Placeholders are not included.
+export function ownerOnlyFields(doc) {
   const get = key => doc?.get?.(key);
   const list = key => (Array.isArray(get(key)) ? get(key) : []);
+  const str = key => get(key) || null;
   return JSON.stringify({
     CreatedBy: idOf(get('CreatedBy')),
     ExtUserPtr: idOf(get('ExtUserPtr')),
@@ -22,28 +29,34 @@ export function documentParties(doc) {
       p?.signerObjId || null,
       idOf(p?.signerPtr),
     ]),
+    WebhookUrl: str('WebhookUrl'),
+    RedirectUrl: str('RedirectUrl'),
+    URL: str('URL'),
+    SignedUrl: str('SignedUrl'),
+    CertificateUrl: str('CertificateUrl'),
   });
 }
 
 // #86: DocumentAftersave gives each signer ACL write on the whole document, so a signer
-// could add a recipient (a Placeholders email, a Signer, Bcc, SenderMail) or take the
-// document over (CreatedBy, ExtUserPtr) and then mail anyone through sendmailv3/forwarddoc.
-// Only the document's creator, or the master key (signPdf, linkcontacttodoc, LeaseLynx),
-// may change its parties. A signer's other writes (decline, widget values) still save.
-export function assertPartiesUnchanged(request) {
+// could add a recipient (a Placeholders email, a Signer, Bcc, SenderMail) and then mail
+// anyone through sendmailv3/forwarddoc, take the document over (CreatedBy, ExtUserPtr),
+// redirect its webhook, or swap its file. Only the document's creator, or the master key
+// (signPdf, linkcontacttodoc, LeaseLynx), may change ownerOnlyFields. A signer's other
+// writes (decline, widget values) still save.
+export function assertOwnerOnlyFieldsUnchanged(request) {
   if (request.master || !request.original) return;
   const ownerId = idOf(request.original.get('CreatedBy'));
   if (ownerId && request.user?.id === ownerId) return;
-  if (documentParties(request.original) !== documentParties(request.object)) {
+  if (ownerOnlyFields(request.original) !== ownerOnlyFields(request.object)) {
     throw new Parse.Error(
       Parse.Error.OPERATION_FORBIDDEN,
-      "Only the document's owner can change its recipients."
+      "Only the document's owner can change its recipients, files or notifications."
     );
   }
 }
 
 async function DocumentBeforesave(request) {
-  assertPartiesUnchanged(request);
+  assertOwnerOnlyFieldsUnchanged(request);
   if (!request.original) {
     const validations = [
       { field: 'Name', max: MAX_NAME_LENGTH },
