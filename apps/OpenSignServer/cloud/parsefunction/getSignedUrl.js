@@ -167,21 +167,14 @@ export async function getSignedUrl(request) {
       const isAuth = await isAuthenticated(request?.user);
       if (!isAuth) {
         throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
-      } else {
-        // The client supplies a document or template ID for every bucket read.
-        // A session by itself cannot authorize an arbitrary object key.
-        if (!isLocalStorage()) {
-          throw new Parse.Error(
-            Parse.Error.OPERATION_FORBIDDEN,
-            'A document or template is required to access stored files.'
-          );
-        }
-        if (isLocalParseFileUrl(url, process.env.SERVER_URL)) {
-          return presignedlocalUrl(url);
-        } else {
-          return url;
-        }
       }
+      // Every client read names the document or template the file belongs to (#112).
+      // A session by itself authorises no file, in either storage mode: local storage
+      // used to mint a /files/ token here for any URL any signed-in user named.
+      throw new Parse.Error(
+        Parse.Error.OPERATION_FORBIDDEN,
+        'A document or template is required to access stored files.'
+      );
     }
   } catch (err) {
     console.log('error in getsignedurl', err);
