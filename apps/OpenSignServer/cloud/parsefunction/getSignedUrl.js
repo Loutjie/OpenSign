@@ -96,10 +96,12 @@ export async function resolveStoredUrl(rawUrl) {
 // (or contracts_Template) references: its PDF, signed PDF, certificate, and every
 // placeholder image (`options.response` or `options.defaultValue`) of every role, the
 // shape Utils.js `handleValidImage` walks. Anything not in our bucket is skipped.
-export function documentFileKeys(doc) {
+// `isStored` picks which URLs count: our bucket's by default, local Parse file URLs in
+// local storage mode.
+export function documentFileKeys(doc, isStored = isOurBucketUrl) {
   const keys = new Set();
   const add = value => {
-    if (typeof value === 'string' && isOurBucketUrl(value)) keys.add(objectKeyFromUrl(value));
+    if (typeof value === 'string' && isStored(value)) keys.add(objectKeyFromUrl(value));
   };
   add(doc?.URL);
   add(doc?.SignedUrl);
@@ -115,6 +117,38 @@ export function documentFileKeys(doc) {
   return keys;
 }
 
+// The document or template `request` names, looked up first in every storage mode
+// (a missing or archived one is OBJECT_NOT_FOUND), and who may read its files:
+// - a template: a signed-in user whose session can read it (owner, shared team); every
+//   client caller (reports, bulk send, prefill) is on a signed-in page;
+// - a document with IsEnableOTP: a signed-in party, i.e. a session the document's ACL
+//   lets read it (its creator and signers);
+// - any other document: whoever holds its link. LeaseLynx never sets IsEnableOTP and its
+//   signers sign and download with no session, so the docId is the credential, exactly
+//   as for getDocument, whose afterFind signs the same files.
+async function authorisedRecord(request, docId, templateId) {
+  const className = docId ? 'contracts_Document' : 'contracts_Template';
+  const id = docId || templateId;
+  const record = await new Parse.Query(className)
+    .equalTo('objectId', id)
+    .notEqualTo('IsArchive', true)
+    .first({ useMasterKey: true });
+  if (!record) throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document not found.');
+  const json = record.toJSON();
+  if (templateId || json.IsEnableOTP) {
+    if (!(await isAuthenticated(request?.user))) {
+      throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
+    }
+    const readable = await new Parse.Query(className)
+      .equalTo('objectId', id)
+      .first({ sessionToken: request.user.getSessionToken() });
+    if (!readable) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'You are not a party to this document.');
+    }
+  }
+  return json;
+}
+
 export async function getSignedUrl(request) {
   try {
     const docId = request.params.docId || '';
@@ -123,42 +157,24 @@ export async function getSignedUrl(request) {
 
     if (docId || templateId) {
       try {
+        const record = await authorisedRecord(request, docId, templateId);
+        // A record authorises its own files only (#12, #112): never sign or tokenise a
+        // file it does not reference. Checked in every storage mode.
+        const notItsFile = () =>
+          new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'File does not belong to this document.');
         if (isLocalParseFileUrl(url, process.env.SERVER_URL)) {
+          // S3 mode refuses here (presignedlocalUrl): no /files/ tokens over the bucket.
+          if (!isLocalStorage()) return presignedlocalUrl(url);
+          const isLocalFile = value => isLocalParseFileUrl(value, process.env.SERVER_URL);
+          if (!documentFileKeys(record, isLocalFile).has(objectKeyFromUrl(url))) throw notItsFile();
           return presignedlocalUrl(url);
-        } else if (!isLocalStorage()) {
-          const query = new Parse.Query(docId ? 'contracts_Document' : 'contracts_Template');
-          query.equalTo('objectId', docId ? docId : templateId);
-          query.include('ExtUserPtr.TenantId');
-          query.notEqualTo('IsArchive', true);
-          const res = await query.first({ useMasterKey: true });
-          if (!res) throw new Parse.Error(Parse.Error.OBJECT_NOT_FOUND, 'Document not found.');
-
-          const _resDoc = res?.toJSON();
-          // Ensure user is authenticated if OTP is required
-          if (_resDoc?.IsEnableOTP) {
-            const isAuth = await isAuthenticated(request?.user);
-            if (!isAuth) {
-              throw new Parse.Error(
-                Parse.Error.INVALID_SESSION_TOKEN,
-                'User is not authenticated.'
-              );
-            }
-          }
-
-          // A document link authorises that document's files only (#12): never sign a
-          // key the document does not reference.
-          if (isOurBucketUrl(url) && !documentFileKeys(_resDoc).has(objectKeyFromUrl(url))) {
-            throw new Parse.Error(
-              Parse.Error.OPERATION_FORBIDDEN,
-              'File does not belong to this document.'
-            );
-          }
-
-          const presignedUrl = await getPresignedUrl(url);
-          return presignedUrl;
-        } else {
-          return url;
         }
+        if (isOurBucketUrl(url)) {
+          if (!documentFileKeys(record).has(objectKeyFromUrl(url))) throw notItsFile();
+          return getPresignedUrl(url);
+        }
+        // data: URLs and external images are not ours to sign: returned unchanged.
+        return url;
       } catch (err) {
         console.log('Err in presigned url', err);
         throw err;
