@@ -54,9 +54,35 @@ export function guardExtUserAuthority(request) {
   }
 }
 
+const idOf = value => (value && (value.id || value.objectId)) || null;
+
+// contracts_Contactbook fields that say who a contact is. mailGuard.js trusts a
+// document's Signers[].Email, and ContactBookAftersave gives the contact's own user ACL
+// write on its row, so a signer could re-address itself and mail any address.
+export const CONTACT_IDENTITY_FIELDS = Object.freeze(['Email', 'UserId', 'CreatedBy']);
+
+// #86. Only the master key creates contacts (savecontact, linkcontacttodoc,
+// createbatchcontact, editcontact); a direct client create also made ContactBookAftersave
+// create a _User for any email. On update, only the contact's creator (or the master
+// key) may change its identity; its user may still save TourStatus and the like.
+export function guardContactIdentity(request) {
+  if (request?.master) return;
+  if (!request?.original) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Permission denied.');
+  }
+  const ownerId = idOf(request.original.get('CreatedBy'));
+  if (ownerId && request.user?.id === ownerId) return;
+  for (const field of CONTACT_IDENTITY_FIELDS) {
+    if (!sameValue(request.object.get(field), request.original.get(field))) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, `${field} cannot be changed.`);
+    }
+  }
+}
+
 export function registerAccessGuards(cloud) {
   cloud.beforeSave(Parse.User, rejectSelfSignup);
   cloud.beforeSave('contracts_Users', guardExtUserAuthority);
+  cloud.beforeSave('contracts_Contactbook', guardContactIdentity);
   for (const className of MASTER_ONLY_CLASSES) {
     cloud.beforeFind(className, requireMasterKey);
     cloud.beforeSave(className, requireMasterKey);
