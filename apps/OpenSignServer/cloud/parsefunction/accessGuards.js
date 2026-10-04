@@ -56,10 +56,18 @@ export function guardExtUserAuthority(request) {
 
 const idOf = value => (value && (value.id || value.objectId)) || null;
 
-// contracts_Contactbook fields that say who a contact is. mailGuard.js trusts a
-// document's Signers[].Email, and ContactBookAftersave gives the contact's own user ACL
-// write on its row, so a signer could re-address itself and mail any address.
-export const CONTACT_IDENTITY_FIELDS = Object.freeze(['Email', 'UserId', 'CreatedBy']);
+// contracts_Contactbook fields only the contact's creator (or the master key) may change.
+// mailGuard.js trusts a document's Signers[].Email, and ContactBookAftersave gives the
+// contact's own user ACL write on its row, so a signer could re-address itself and mail
+// any address. ExtUserPtr and IsDeleted belong to the owner's contact book (editcontact
+// soft-deletes with the owner's session); the row's ACL is compared separately.
+export const CONTACT_IDENTITY_FIELDS = Object.freeze([
+  'Email',
+  'UserId',
+  'CreatedBy',
+  'ExtUserPtr',
+  'IsDeleted',
+]);
 
 // #86. Only the master key creates contacts (savecontact, linkcontacttodoc,
 // createbatchcontact, editcontact); a direct client create also made ContactBookAftersave
@@ -76,6 +84,9 @@ export function guardContactIdentity(request) {
     if (!sameValue(request.object.get(field), request.original.get(field))) {
       throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, `${field} cannot be changed.`);
     }
+  }
+  if (!sameValue(request.object.getACL()?.toJSON(), request.original.getACL()?.toJSON())) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'ACL cannot be changed.');
   }
 }
 
