@@ -27,9 +27,32 @@ export async function assertUserAdmin(request, { callerRole = callerUserRole } =
   }
 }
 
-export function makeAddUser({ authorize = assertUserAdmin } = {}) {
+export async function callerTenantId(
+  user,
+  { query = () => new Parse.Query('contracts_Users') } = {}
+) {
+  const extUser = await query()
+    .equalTo('UserId', { __type: 'Pointer', className: '_User', objectId: user.id })
+    .first({ useMasterKey: true });
+  return extUser?.get('TenantId')?.id || null;
+}
+
+// An admin adds users to their own tenant only (#86): otherwise an admin of one tenant
+// could put an account it controls into another.
+export async function assertCallerTenant(request, { tenantOf = callerTenantId } = {}) {
+  const own = await tenantOf(request.user);
+  if (!own || request.params?.tenantId !== own) {
+    throw new Parse.Error(
+      Parse.Error.OPERATION_FORBIDDEN,
+      'You can only add users to your own organisation.'
+    );
+  }
+}
+
+export function makeAddUser({ authorize = assertUserAdmin, sameTenant = assertCallerTenant } = {}) {
   return async function addUser(request) {
     await authorize(request);
+    await sameTenant(request);
     return addAuthorizedUser(request);
   };
 }
@@ -91,35 +114,24 @@ async function addAuthorizedUser(request) {
           acl.setReadAccess(request.user.id, true);
           acl.setWriteAccess(request.user.id, true);
           extUser.setACL(acl);
-          const extUserRes = await extUser.save();
+          // Master key: guardExtUserAuthority refuses client-side creates of this class.
+          const extUserRes = await extUser.save(null, { useMasterKey: true });
 
           const parseData = JSON.parse(JSON.stringify(extUserRes));
           return parseData;
         }
       } catch (err) {
         console.log('err ', err);
+        // 202: the email already has an account. This used to set that account's password
+        // to the one the caller chose, whoever's account it was (#86): a takeover of any
+        // landlord or tenant by any admin, and every LeaseLynx landlord is an admin.
         if (err.code === 202) {
-          const userQuery = new Parse.Query(Parse.User);
-          userQuery.equalTo('email', email);
-          const userRes = await userQuery.first({ useMasterKey: true });
-          userRes.setPassword(password);
-          await userRes.save(null, { useMasterKey: true });
-          extUser.set('CreatedBy', currentUser);
-          extUser.set('UserId', { __type: 'Pointer', className: '_User', objectId: userRes.id });
-          const acl = new Parse.ACL();
-          acl.setPublicReadAccess(true);
-          acl.setPublicWriteAccess(true);
-          acl.setReadAccess(request.user.id, true);
-          acl.setWriteAccess(request.user.id, true);
-
-          extUser.setACL(acl);
-          const res = await extUser.save();
-
-          const parseData = JSON.parse(JSON.stringify(res));
-          return parseData;
-        } else {
-          throw new Parse.Error(400, err?.message || 'something went wrong');
+          throw new Parse.Error(
+            Parse.Error.USERNAME_TAKEN,
+            'An account with this email already exists.'
+          );
         }
+        throw new Parse.Error(400, err?.message || 'something went wrong');
       }
     } catch (err) {
       console.log('err', err);
