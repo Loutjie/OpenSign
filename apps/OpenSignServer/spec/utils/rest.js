@@ -9,19 +9,20 @@ const APP_ID = 'test';
 const MASTER_KEY = 'test';
 const JAVASCRIPT_KEY = 'test';
 
-export async function rest(method, path, { body, session, master = false } = {}) {
+// `raw` (a Buffer) is sent as is with `contentType`, for POST /files/<name>.
+export async function rest(method, path, { body, session, master = false, raw, contentType } = {}) {
   // test-runner.js sets javascriptKey, so Parse requires a client key on non-master calls.
   const headers = {
     'X-Parse-Application-Id': APP_ID,
     'X-Parse-Javascript-Key': JAVASCRIPT_KEY,
-    'Content-Type': 'application/json',
+    'Content-Type': raw ? contentType || 'application/octet-stream' : 'application/json',
   };
   if (session) headers['X-Parse-Session-Token'] = session;
   if (master) headers['X-Parse-Master-Key'] = MASTER_KEY;
   const res = await fetch(`${BASE}${path}`, {
     method,
     headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: raw ?? (body === undefined ? undefined : JSON.stringify(body)),
   });
   const text = await res.text();
   let json = null;

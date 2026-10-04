@@ -40,7 +40,8 @@ if (useLocal !== 'true') {
       fileAcl: 'none',
       region: process.env.DO_REGION,
       directAccess: true,
-      preserveFileName: true,
+      // No preserveFileName here: @parse/s3-files-adapter 5 never reads it. The object key
+      // is set by parse-server's top-level preserveFileName (below), which must stay false.
       presignedUrl: true,
       presignedUrlExpires: 900,
       s3overrides: {
@@ -93,9 +94,16 @@ export const config = {
   // Your apps name. This will appear in the subject and body of the emails that are sent.
   appName: appName,
   allowClientClassCreation: false,
+  // FilesController prefixes every stored file with randomHexString(32) unless this is
+  // true, so a client can never choose (or overwrite) an object key, and keys such as
+  // <hex>_signed_<name>.pdf cannot be guessed. Stated explicitly so it is not flipped.
+  preserveFileName: false,
+  // Uploads need a session (or the master key, which cloud code uses: utils/fileUtils.js
+  // parseUploadFile). A guest signer never uploads: signature and image widgets go to
+  // signPdf as base64; every Parse.File save in the client is on a signed-in page.
   fileUpload: {
-    enableForPublic: true,
-    enableForAnonymousUser: true,
+    enableForPublic: false,
+    enableForAnonymousUser: false,
     enableForAuthenticatedUser: true,
   },
   allowExpiredAuthDataToken: false,
