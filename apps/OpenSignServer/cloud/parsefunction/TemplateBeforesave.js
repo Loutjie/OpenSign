@@ -1,11 +1,19 @@
 import { MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from '../../Utils.js';
 import { setTemplateCount } from '../../utils/CountUtils.js';
-import { assertOwnedByCaller } from './ownership.js';
+import { assertOwnerOnlyWrite } from './ownership.js';
+
+// Fields a client that is not the template's owner may write directly: none.
+// TemplateAfterSave gives every template signer ACL write on the whole template, but
+// the client's template writes are all the owner's (Form create, TemplatePlaceholder,
+// TemplatesReport share-with); a teammate a template is shared with reads it through
+// GetTemplate/getReport and has no ACL write. Server-side writers (createduplicate,
+// saveastemplate) use the master key.
+export const TEMPLATE_SIGNER_WRITABLE_FIELDS = Object.freeze([]);
 
 async function TemplateBeforeSave(request) {
-  // A client creates a template only in its own name (getsignedurl signs a template's
-  // files for sessions that can read it).
-  if (!request.original) await assertOwnedByCaller(request);
+  // A client creates a template only in its own name, and only its owner (or the master
+  // key) changes it (getsignedurl signs a template's files for sessions that can read it).
+  await assertOwnerOnlyWrite(request, TEMPLATE_SIGNER_WRITABLE_FIELDS, 'template');
   if (!request.original) {
     const validations = [
       { field: 'Name', max: MAX_NAME_LENGTH },

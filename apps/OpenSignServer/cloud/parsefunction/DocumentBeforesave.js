@@ -1,6 +1,6 @@
 import { MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from '../../Utils.js';
 import { setDocumentCount } from '../../utils/CountUtils.js';
-import { assertOwnedByCaller, idOf } from './ownership.js';
+import { assertOwnerOnlyWrite } from './ownership.js';
 
 // Fields a client that is not the document's owner may write directly: none. Every
 // signer action goes through a cloud function with the master key (signPdf saves
@@ -16,24 +16,8 @@ export const SIGNER_WRITABLE_FIELDS = Object.freeze([]);
 // webhook, flip IsCompleted or IsEnableOTP, rewrite AuditTrail or the ACL. A client save
 // by anyone but the document's creator may now change only SIGNER_WRITABLE_FIELDS; the
 // creator's own saves must keep the document in the creator's name (assertOwnedByCaller).
-export async function assertDocumentWriteAllowed(request) {
-  if (request.master) return;
-  if (!request.original) return assertOwnedByCaller(request);
-  const ownerId = idOf(request.original.get('CreatedBy'));
-  if (ownerId && request.user?.id === ownerId) return assertOwnedByCaller(request);
-  const allowed = key => SIGNER_WRITABLE_FIELDS.includes(key);
-  const changed = request.object.dirtyKeys().filter(key => !allowed(key));
-  // An ACL change is checked by value too, in case it does not show as a dirty key.
-  const aclChanged =
-    JSON.stringify(request.object.getACL()?.toJSON() ?? null) !==
-    JSON.stringify(request.original.getACL()?.toJSON() ?? null);
-  if (aclChanged && !allowed('ACL') && !changed.includes('ACL')) changed.push('ACL');
-  if (changed.length) {
-    throw new Parse.Error(
-      Parse.Error.OPERATION_FORBIDDEN,
-      `Only the document's owner can change it (${changed.join(', ')}).`
-    );
-  }
+export function assertDocumentWriteAllowed(request) {
+  return assertOwnerOnlyWrite(request, SIGNER_WRITABLE_FIELDS, 'document');
 }
 
 async function DocumentBeforesave(request) {
