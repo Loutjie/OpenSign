@@ -39,6 +39,9 @@ describe('a contact\'s identity is its owner\'s to change', () => {
     ['Email', () => `outsider-${tag}@x.test`],
     ['UserId', () => pointer('_User', owner.id)],
     ['CreatedBy', () => pointer('_User', signer.id)],
+    ['ExtUserPtr', () => pointer('contracts_Users', `someExt${tag}`)],
+    ['IsDeleted', () => true],
+    ['ACL', () => ({ '*': { read: true, write: true } })],
   ]) {
     it(`refuses the contact's own user changing ${field}`, async () => {
       const before = await get();
