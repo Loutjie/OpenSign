@@ -1,7 +1,11 @@
 import { MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from '../../Utils.js';
 import { setTemplateCount } from '../../utils/CountUtils.js';
+import { assertOwnedByCaller } from './ownership.js';
 
 async function TemplateBeforeSave(request) {
+  // A client creates a template only in its own name (getsignedurl signs a template's
+  // files for sessions that can read it).
+  if (!request.original) await assertOwnedByCaller(request);
   if (!request.original) {
     const validations = [
       { field: 'Name', max: MAX_NAME_LENGTH },
