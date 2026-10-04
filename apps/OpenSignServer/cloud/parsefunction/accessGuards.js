@@ -22,8 +22,41 @@ export function requireMasterKey(request) {
 // code; one that could write MailRateLimit could reset its own daily limit.
 export const MASTER_ONLY_CLASSES = Object.freeze(['defaultdata_Otp', 'MailRateLimit']);
 
+// contracts_Users fields that say who a row is and what it may do. adduser's admin check
+// reads UserRole from the caller's own row, mailGuard.js trusts Email as the owner's
+// address, and the class's CLP lets any client create and update rows (setclp migration),
+// many of which have no ACL. Clients only ever write profile fields and TourStatus here.
+export const EXT_USER_AUTHORITY_FIELDS = Object.freeze([
+  'UserId',
+  'UserRole',
+  'TenantId',
+  'OrganizationId',
+  'TeamIds',
+  'CreatedBy',
+  'Email',
+]);
+
+const sameValue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+
+// #86: without this, any signed-in user could write a contracts_Users row naming itself
+// contracts_Admin (or set UserRole on its own row) and pass adduser's admin check. Every
+// legitimate writer of these fields (usersignup, addadmin, updateuserasadmin, adduser)
+// uses the master key.
+export function guardExtUserAuthority(request) {
+  if (request?.master) return;
+  if (!request?.original) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Permission denied.');
+  }
+  for (const field of EXT_USER_AUTHORITY_FIELDS) {
+    if (!sameValue(request.object.get(field), request.original.get(field))) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, `${field} cannot be changed.`);
+    }
+  }
+}
+
 export function registerAccessGuards(cloud) {
   cloud.beforeSave(Parse.User, rejectSelfSignup);
+  cloud.beforeSave('contracts_Users', guardExtUserAuthority);
   for (const className of MASTER_ONLY_CLASSES) {
     cloud.beforeFind(className, requireMasterKey);
     cloud.beforeSave(className, requireMasterKey);
