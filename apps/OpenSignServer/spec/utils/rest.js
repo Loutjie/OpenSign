@@ -7,9 +7,15 @@ import { randomBytes } from 'node:crypto';
 const BASE = 'http://localhost:30001/test';
 const APP_ID = 'test';
 const MASTER_KEY = 'test';
+const JAVASCRIPT_KEY = 'test';
 
 export async function rest(method, path, { body, session, master = false } = {}) {
-  const headers = { 'X-Parse-Application-Id': APP_ID, 'Content-Type': 'application/json' };
+  // test-runner.js sets javascriptKey, so Parse requires a client key on non-master calls.
+  const headers = {
+    'X-Parse-Application-Id': APP_ID,
+    'X-Parse-Javascript-Key': JAVASCRIPT_KEY,
+    'Content-Type': 'application/json',
+  };
   if (session) headers['X-Parse-Session-Token'] = session;
   if (master) headers['X-Parse-Master-Key'] = MASTER_KEY;
   const res = await fetch(`${BASE}${path}`, {
@@ -39,9 +45,9 @@ export async function makeUser(email, password = `pw-${uniq()}`) {
     body: { username: email, email, password },
   });
   if (created.status !== 201) throw new Error(`makeUser ${email}: ${JSON.stringify(created.body)}`);
-  const session = await logIn(email, password);
-  if (!session) throw new Error(`makeUser ${email}: login failed`);
-  return { id: created.body.objectId, email, password, session };
+  const login = await rest('POST', '/login', { body: { username: email, password } });
+  if (login.status !== 200) throw new Error(`makeUser ${email}: login ${JSON.stringify(login.body)}`);
+  return { id: created.body.objectId, email, password, session: login.body.sessionToken };
 }
 
 // Returns the session token, or null when the credentials are refused.
