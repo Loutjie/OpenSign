@@ -34,3 +34,25 @@ export async function assertOwnedByCaller(request) {
     forbid('ExtUserPtr must be your own user.');
   }
 }
+
+// The rule for a client (non-master) save of a document or template: a create, or an
+// update by its CreatedBy, must keep it in the caller's name (assertOwnedByCaller); an
+// update by anyone else may change only `writable` fields. The after-save hooks give
+// every signer ACL write on the whole record, so this is what limits them. A record with
+// no CreatedBy is master-only. An ACL change is compared by value too, in case it does
+// not show as a dirty key.
+export async function assertOwnerOnlyWrite(request, writable = [], what = 'record') {
+  if (request.master) return;
+  if (!request.original) return assertOwnedByCaller(request);
+  const ownerId = idOf(request.original.get('CreatedBy'));
+  if (ownerId && request.user?.id === ownerId) return assertOwnedByCaller(request);
+  const allowed = key => writable.includes(key);
+  const changed = request.object.dirtyKeys().filter(key => !allowed(key));
+  const aclChanged =
+    JSON.stringify(request.object.getACL()?.toJSON() ?? null) !==
+    JSON.stringify(request.original.getACL()?.toJSON() ?? null);
+  if (aclChanged && !allowed('ACL') && !changed.includes('ACL')) changed.push('ACL');
+  if (changed.length) {
+    forbid(`Only the ${what}'s owner can change it (${changed.join(', ')}).`);
+  }
+}
