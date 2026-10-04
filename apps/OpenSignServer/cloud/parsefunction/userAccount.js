@@ -21,5 +21,8 @@ export async function createUserAccount(
   if (phone) {
     user.set('phone', phone);
   }
-  return user.save(null, { useMasterKey: true });
+  const saved = await user.save(null, { useMasterKey: true });
+  // A pointer, not the saved instance: that still carries `password`, and callers set it
+  // on a row they return as JSON (savecontact gave a landlord the contact's password).
+  return Parse.User.createWithoutData(saved.id);
 }
