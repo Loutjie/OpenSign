@@ -143,7 +143,10 @@ async function authorisedRecord(request, docId, templateId) {
       .equalTo('objectId', id)
       .first({ sessionToken: request.user.getSessionToken() });
     if (!readable) {
-      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'You are not a party to this document.');
+      throw new Parse.Error(
+        Parse.Error.OPERATION_FORBIDDEN,
+        'You are not a party to this document.'
+      );
     }
   }
   return json;
@@ -161,7 +164,10 @@ export async function getSignedUrl(request) {
         // A record authorises its own files only (#12, #112): never sign or tokenise a
         // file it does not reference. Checked in every storage mode.
         const notItsFile = () =>
-          new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'File does not belong to this document.');
+          new Parse.Error(
+            Parse.Error.OPERATION_FORBIDDEN,
+            'File does not belong to this document.'
+          );
         if (isLocalParseFileUrl(url, process.env.SERVER_URL)) {
           // S3 mode refuses here (presignedlocalUrl): no /files/ tokens over the bucket.
           if (!isLocalStorage()) return presignedlocalUrl(url);
