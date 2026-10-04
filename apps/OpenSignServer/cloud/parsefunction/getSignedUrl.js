@@ -139,10 +139,14 @@ async function authorisedRecord(request, docId, templateId) {
     if (!(await isAuthenticated(request?.user))) {
       throw new Parse.Error(Parse.Error.INVALID_SESSION_TOKEN, 'User is not authenticated.');
     }
-    const readable = await new Parse.Query(className)
-      .equalTo('objectId', id)
-      .first({ sessionToken: request.user.getSessionToken() });
-    if (!readable) {
+    // A get, not a find: production's contracts_Template CLP is find: {} (master only)
+    // and get: open, with the ACL deciding. (Parse also checks an objectId-only find as a
+    // get, but any added constraint would make it a find and refuse even the owner.)
+    // Parse answers OBJECT_NOT_FOUND when the ACL hides the record.
+    try {
+      await new Parse.Query(className).get(id, { sessionToken: request.user.getSessionToken() });
+    } catch (err) {
+      if (err?.code !== Parse.Error.OBJECT_NOT_FOUND) throw err;
       throw new Parse.Error(
         Parse.Error.OPERATION_FORBIDDEN,
         'You are not a party to this document.'
