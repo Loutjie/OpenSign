@@ -1,62 +1,43 @@
 import { MAX_DESCRIPTION_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH } from '../../Utils.js';
 import { setDocumentCount } from '../../utils/CountUtils.js';
-import { normaliseEmail } from './mailGuard.js';
+import { assertOwnedByCaller, idOf } from './ownership.js';
 
-const idOf = value => (value && (value.id || value.objectId)) || null;
-
-// Everything about a document that only its owner may change:
-// - who its parties are, and so who may be emailed about it: mailGuard.js allows its
-//   Placeholders emails, its Signers and its owner (ExtUserPtr, CreatedBy); the completion
-//   mail (pdf/PDF.js) also goes to its Bcc and SenderMail;
-// - where news of it goes: WebhookUrl receives every signing event (with the signed
-//   file's URL; LeaseLynx archives the lease from it), RedirectUrl is where each signer's
-//   browser goes after signing;
-// - its files: URL/SignedUrl is what every later party sees and signs, and what
-//   getsignedurl signs for anyone holding the document link (#112).
-// Widget positions and values inside Placeholders are not included.
-export function ownerOnlyFields(doc) {
-  const get = key => doc?.get?.(key);
-  const list = key => (Array.isArray(get(key)) ? get(key) : []);
-  const str = key => get(key) || null;
-  return JSON.stringify({
-    CreatedBy: idOf(get('CreatedBy')),
-    ExtUserPtr: idOf(get('ExtUserPtr')),
-    Signers: list('Signers').map(idOf),
-    Bcc: list('Bcc').map(idOf),
-    SenderMail: normaliseEmail(get('SenderMail')),
-    Placeholders: list('Placeholders').map(p => [
-      normaliseEmail(p?.email),
-      p?.signerObjId || null,
-      idOf(p?.signerPtr),
-    ]),
-    WebhookUrl: str('WebhookUrl'),
-    RedirectUrl: str('RedirectUrl'),
-    URL: str('URL'),
-    SignedUrl: str('SignedUrl'),
-    CertificateUrl: str('CertificateUrl'),
-  });
-}
+// Fields a client that is not the document's owner may write directly: none. Every
+// signer action goes through a cloud function with the master key (signPdf saves
+// widgets, SignedUrl and AuditTrail; declinedoc; triggerevent; linkcontacttodoc), and
+// the client's direct document writes are all owner-only screens (Form, PlaceHolderSign,
+// SignyourselfPdf, the drive, sendEmailToSigners, the sent-documents reports' revoke,
+// PdfDeclineModal's extend-expiry, which checks isCreator). Add a field here only with
+// a client signer flow that writes it.
+export const SIGNER_WRITABLE_FIELDS = Object.freeze([]);
 
 // #86: DocumentAftersave gives each signer ACL write on the whole document, so a signer
-// could add a recipient (a Placeholders email, a Signer, Bcc, SenderMail) and then mail
-// anyone through sendmailv3/forwarddoc, take the document over (CreatedBy, ExtUserPtr),
-// redirect its webhook, or swap its file. Only the document's creator, or the master key
-// (signPdf, linkcontacttodoc, LeaseLynx), may change ownerOnlyFields. A signer's other
-// writes (decline, widget values) still save.
-export function assertOwnerOnlyFieldsUnchanged(request) {
-  if (request.master || !request.original) return;
+// could change anything on it: add recipients and mail them, swap the file, repoint the
+// webhook, flip IsCompleted or IsEnableOTP, rewrite AuditTrail or the ACL. A client save
+// by anyone but the document's creator may now change only SIGNER_WRITABLE_FIELDS; the
+// creator's own saves must keep the document in the creator's name (assertOwnedByCaller).
+export async function assertDocumentWriteAllowed(request) {
+  if (request.master) return;
+  if (!request.original) return assertOwnedByCaller(request);
   const ownerId = idOf(request.original.get('CreatedBy'));
-  if (ownerId && request.user?.id === ownerId) return;
-  if (ownerOnlyFields(request.original) !== ownerOnlyFields(request.object)) {
+  if (ownerId && request.user?.id === ownerId) return assertOwnedByCaller(request);
+  const allowed = key => SIGNER_WRITABLE_FIELDS.includes(key);
+  const changed = request.object.dirtyKeys().filter(key => !allowed(key));
+  // An ACL change is checked by value too, in case it does not show as a dirty key.
+  const aclChanged =
+    JSON.stringify(request.object.getACL()?.toJSON() ?? null) !==
+    JSON.stringify(request.original.getACL()?.toJSON() ?? null);
+  if (aclChanged && !allowed('ACL') && !changed.includes('ACL')) changed.push('ACL');
+  if (changed.length) {
     throw new Parse.Error(
       Parse.Error.OPERATION_FORBIDDEN,
-      "Only the document's owner can change its recipients, files or notifications."
+      `Only the document's owner can change it (${changed.join(', ')}).`
     );
   }
 }
 
 async function DocumentBeforesave(request) {
-  assertOwnerOnlyFieldsUnchanged(request);
+  await assertDocumentWriteAllowed(request);
   if (!request.original) {
     const validations = [
       { field: 'Name', max: MAX_NAME_LENGTH },
