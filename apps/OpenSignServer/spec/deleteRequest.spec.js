@@ -72,6 +72,25 @@ describe('senddeleterequest is for the caller\'s own account', () => {
     expect(calls).toEqual([]);
   });
 
+  it('refuses no session (209) and a missing userId (102), relaying nothing', async () => {
+    const { calls, send } = sender();
+    let { error } = await outcome(send({ params: { userId: ids.adminA } }));
+    expect(error?.code).toBe(Parse.Error.INVALID_SESSION_TOKEN);
+    ({ error } = await outcome(send({ user: { id: ids.adminA }, params: {} })));
+    expect(error?.code).toBe(Parse.Error.INVALID_QUERY);
+    expect(calls).toEqual([]);
+  });
+
+  it('answers OBJECT_NOT_FOUND for a caller with no contracts_Users row', async () => {
+    spyOn(console, 'log');
+    const { calls, send } = sender();
+    const noRow = `noRow${tag}`;
+    const { error } = await outcome(send({ user: { id: noRow }, params: { userId: noRow } }));
+    expect(error?.code).toBe(Parse.Error.OBJECT_NOT_FOUND);
+    expect(error?.message).toBe('Account not found.');
+    expect(calls).toEqual([]);
+  });
+
   it('mails an admin\'s own request to that admin\'s own address', async () => {
     const { calls, send } = sender();
     const { result } = await outcome(send({ user: { id: ids.adminA }, params: { userId: ids.adminA } }));
