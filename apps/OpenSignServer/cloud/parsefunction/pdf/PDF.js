@@ -18,6 +18,8 @@ import { P12Signer } from '@signpdf/signer-p12';
 import { buildDownloadFilename, parseUploadFile } from '../../../utils/fileUtils.js';
 import sendMailWithAttachment from '../sendMailWithAttachment.js';
 import { alertMailFailure, errorSummary, postSendmailv3 } from '../sendmailClient.js';
+import { logWebhookResult } from '../../../utils/webhookLog.js';
+import { postWebhook } from '../../../utils/webhookDelivery.js';
 
 const serverUrl = cloudServerUrl; // process.env.SERVER_URL;
 const APPID = serverAppId;
@@ -559,7 +561,7 @@ async function PDF(req) {
         if (_resDoc.WebhookUrl) {
           const webhookEvent = updatedDoc?.isCompleted ? 'document_completed' : 'document_signed';
           try {
-            await axios.post(_resDoc.WebhookUrl, {
+            await postWebhook(_resDoc.WebhookUrl, {
               event: webhookEvent,
               document_id: docId,
               signed_document_url: data.imageUrl,
@@ -568,9 +570,9 @@ async function PDF(req) {
               total_signers: _resDoc.Signers?.length || 0,
               signers_completed: updateAuditTrail?.filter(x => x.Activity === 'Signed')?.length || 0,
             });
-            console.log(`Webhook sent: ${webhookEvent} → ${_resDoc.WebhookUrl}`);
+            logWebhookResult(webhookEvent, docId);
           } catch (whErr) {
-            console.log(`Webhook failed: ${whErr.message}`);
+            logWebhookResult(webhookEvent, docId, { failed: true, httpStatus: whErr?.response?.status });
           }
         }
 

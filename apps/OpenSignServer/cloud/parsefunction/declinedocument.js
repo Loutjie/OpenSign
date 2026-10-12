@@ -1,6 +1,7 @@
-import axios from 'axios';
 import { appName } from '../../Utils.js';
 import { alertMailFailure, errorSummary, postSendmailv3 } from './sendmailClient.js';
+import { logWebhookResult } from '../../utils/webhookLog.js';
+import { postWebhook } from '../../utils/webhookDelivery.js';
 
 // Fire-and-forget (the decline is saved and the webhook tells LeaseLynx), so a failed
 // email to the owner is an ALERT log.
@@ -65,7 +66,7 @@ async function sendDeclineWebhook(doc, docId, userId, reason) {
   try {
     const removePrefill = doc?.Placeholders?.filter(x => x?.Role !== 'prefill') || [];
     const signer = removePrefill.find(x => x?.signerPtr?.UserId?.objectId === userId);
-    await axios.post(doc.WebhookUrl, {
+    await postWebhook(doc.WebhookUrl, {
       event: 'document_declined',
       document_id: docId,
       signer: {
@@ -78,9 +79,9 @@ async function sendDeclineWebhook(doc, docId, userId, reason) {
       total_signers: removePrefill.length,
       signers_completed: 0,
     });
-    console.log(`Webhook sent: document_declined → ${doc.WebhookUrl}`);
+    logWebhookResult('document_declined', docId);
   } catch (err) {
-    console.log(`Webhook failed: ${err.message}`);
+    logWebhookResult('document_declined', docId, { failed: true, httpStatus: err?.response?.status });
   }
 }
 

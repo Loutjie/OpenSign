@@ -1,5 +1,7 @@
 import axios from 'axios';
 import { cloudServerUrl, serverAppId } from '../../Utils.js';
+import { logWebhookResult } from '../../utils/webhookLog.js';
+import { postWebhook } from '../../utils/webhookDelivery.js';
 
 export default async function triggerEvent(request) {
   const event = request.params.event;
@@ -83,16 +85,16 @@ export default async function triggerEvent(request) {
           const contactQuery = new Parse.Query('contracts_Contactbook');
           const contact = await contactQuery.get(contactId, { useMasterKey: true });
           const contactData = contact?.toJSON();
-          await axios.post(webhookUrl, {
+          await postWebhook(webhookUrl, {
             event: 'document_viewed',
             document_id: docId,
             signer: { name: contactData?.Name || '', email: contactData?.Email || '', role: contactData?.Role || '' },
             is_completed: false,
             total_signers: _docRes.Signers?.length || 0,
           });
-          console.log(`Webhook sent: document_viewed → ${webhookUrl}`);
+          logWebhookResult('document_viewed', docId);
         } catch (whErr) {
-          console.log(`Webhook failed: ${whErr.message}`);
+          logWebhookResult('document_viewed', docId, { failed: true, httpStatus: whErr?.response?.status });
         }
       }
     }

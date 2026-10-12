@@ -1,3 +1,4 @@
+import './utils/installCredentialLogging.js';
 import dotenv from 'dotenv';
 dotenv.config({ quiet: true });
 import express from 'express';
@@ -9,7 +10,7 @@ import http from 'http';
 import S3Adapter from '@parse/s3-files-adapter';
 import FSFilesAdapter from '@parse/fs-files-adapter';
 import { app as customRoute } from './cloud/customRoute/customApp.js';
-import { exec } from 'child_process';
+import { runSchemaMigration } from './utils/databaseMigration.js';
 import { appName, cloudServerUrl, serverAppId, useLocal } from './Utils.js';
 import { checkMailRelayConfig, makeApiCallback } from './leaselynxRelay.js';
 import { SSOAuth } from './auth/authadapter.js';
@@ -244,23 +245,11 @@ if (!process.env.TESTING) {
   httpServer.headersTimeout = 100000; // in milliseconds
   httpServer.listen(port, '0.0.0.0', function () {
     console.log('opensign-server running on port ' + port + '.');
-    const isWindows = process.platform === 'win32';
-    // console.log('isWindows', isWindows);
     runDbMigrations();
-    const migrate = isWindows
-      ? `set APPLICATION_ID=${serverAppId}&& set SERVER_URL=${cloudServerUrl}&& set MASTER_KEY=${process.env.MASTER_KEY}&& npx parse-dbtool migrate`
-      : `APPLICATION_ID=${serverAppId} SERVER_URL=${cloudServerUrl} MASTER_KEY=${process.env.MASTER_KEY} npx parse-dbtool migrate`;
-    exec(migrate, (error, stdout, stderr) => {
-      if (error) {
-        console.error(`Error: ${error.message}`);
-        return;
-      }
-
-      if (stderr) {
-        console.error(`Error: ${stderr}`);
-        return;
-      }
-      console.log(`Command output: ${stdout}`);
+    runSchemaMigration({
+      applicationId: serverAppId,
+      serverUrl: `http://127.0.0.1:${port}${process.env.PARSE_MOUNT || '/app'}`,
+      masterKey: process.env.MASTER_KEY,
     });
   });
 }
