@@ -3,6 +3,12 @@ import { postWebhook } from '../utils/webhookDelivery.js';
 const TARGET = 'https://us-central1-leaselynx-ai.cloudfunctions.net/opensignWebhook';
 
 describe('private LeaseLynx webhook delivery', () => {
+  it('preserves an emulator-only legacy credential when a manual local server has no header secret', async () => {
+    const url = 'http://localhost:7405/leaselynx-ai/us-central1/opensignWebhook?secret=dev-only';
+    const requests = [];
+    await postWebhook(url, {}, {secret: '', allowLocal: true, post: async (...args) => requests.push(args)});
+    expect(requests).toEqual([[url, {}, {maxRedirects: 0}]]);
+  });
   it('replaces the legacy URL credential with a private header and forbids redirects', async () => {
     const requests = [];
     const payload = { event: 'document_signed' };

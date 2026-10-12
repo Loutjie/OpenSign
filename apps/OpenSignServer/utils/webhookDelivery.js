@@ -13,6 +13,11 @@ export async function postWebhook(url, payload, {
     ['localhost', '127.0.0.1'].includes(target.hostname) &&
     target.pathname === '/leaselynx-ai/us-central1/opensignWebhook';
   if (!production && !local) return post(url, payload);
+  // Manual emulator stacks predating header configuration still use their
+  // emulator-only query credential. Never apply this fallback to production.
+  if (local && !secret?.trim() && target.searchParams.get('secret')) {
+    return post(url, payload, {maxRedirects: 0});
+  }
   if (typeof secret !== 'string' || !secret.trim()) throw new Error('LeaseLynx webhook credential is missing');
   target.searchParams.delete('secret');
   return post(target.toString(), payload, {
