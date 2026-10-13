@@ -46,14 +46,14 @@ async function rejection(promise) {
 
 describe('A1 no self-signup', () => {
   const newUser = { isNew: () => true };
-  const existingUser = { isNew: () => false };
+  const existingUser = { isNew: () => false, get:()=>undefined };
 
   it('refuses a new _User without the master key', () => {
     expect(() => rejectSelfSignup({ object: newUser, master: false })).toThrowMatching(e => e.code === FORBIDDEN);
   });
   it('allows a new _User with the master key, and any update of an existing one', () => {
     expect(() => rejectSelfSignup({ object: newUser, master: true })).not.toThrow();
-    expect(() => rejectSelfSignup({ object: existingUser, master: false })).not.toThrow();
+    expect(() => rejectSelfSignup({ object: existingUser, original:existingUser, master: false })).not.toThrow();
   });
   it('requireMasterKey refuses everyone but the master key', () => {
     expect(() => requireMasterKey({ master: false })).toThrowMatching(e => e.code === FORBIDDEN);

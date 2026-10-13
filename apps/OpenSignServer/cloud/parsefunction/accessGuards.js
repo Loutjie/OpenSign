@@ -3,11 +3,20 @@
 // nobody signs themselves up.
 
 export function rejectSelfSignup(request) {
+  if (request?.master) return;
   if (request?.object?.isNew?.() && !request.master) {
     throw new Parse.Error(
       Parse.Error.OPERATION_FORBIDDEN,
       'Sign-up is closed. Your landlord or LeaseLynx creates your account.'
     );
+  }
+  if (!request?.original) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Permission denied.');
+  }
+  for (const field of ['email', 'username']) {
+    if (!sameValue(request.object.get(field), request.original.get(field))) {
+      throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, `${field} cannot be changed.`);
+    }
   }
 }
 
@@ -43,14 +52,26 @@ const sameValue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? nu
 // legitimate writer of these fields (usersignup, addadmin, updateuserasadmin, adduser)
 // uses the master key.
 export function guardExtUserAuthority(request) {
-  if (request?.master) return;
+  if (request?.master) {
+    const user = request.object.get('UserId');
+    const ownerId = user?.className === '_User' ? idOf(user) : null;
+    request.object.setACL(new Parse.ACL(ownerId ? { [ownerId]: { read: true, write: true } } : {}));
+    return;
+  }
   if (!request?.original) {
     throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Permission denied.');
+  }
+  const owner = request.original.get('UserId');
+  if (owner?.className !== '_User' || !idOf(owner) || request.user?.id !== idOf(owner)) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Only the linked user may change this profile.');
   }
   for (const field of EXT_USER_AUTHORITY_FIELDS) {
     if (!sameValue(request.object.get(field), request.original.get(field))) {
       throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, `${field} cannot be changed.`);
     }
+  }
+  if (!sameValue(request.object.getACL()?.toJSON(), request.original.getACL()?.toJSON())) {
+    throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'ACL cannot be changed.');
   }
 }
 
@@ -93,6 +114,7 @@ export function guardContactIdentity(request) {
 export function registerAccessGuards(cloud) {
   cloud.beforeSave(Parse.User, rejectSelfSignup);
   cloud.beforeSave('contracts_Users', guardExtUserAuthority);
+  cloud.beforeDelete('contracts_Users', requireMasterKey);
   cloud.beforeSave('contracts_Contactbook', guardContactIdentity);
   for (const className of MASTER_ONLY_CLASSES) {
     cloud.beforeFind(className, requireMasterKey);

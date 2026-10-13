@@ -194,10 +194,9 @@ describe('a signed-in user cannot make themselves an admin or take over another 
     expect(res.body?.result?.UserRole).toBe('contracts_User');
     expect(JSON.stringify(res.body)).not.toContain('password');
     expect(await logIn(email, `member-${tag}`)).toBeTruthy();
-    // Review item 8: the adding admin and the new user only, never public write.
+    // The linked user alone gets profile access; team administration uses cloud code.
     const newUserId = res.body.result.UserId.objectId;
     expect(res.body.result.ACL).toEqual({
-      [otherAdmin.id]: { read: true, write: true },
       [newUserId]: { read: true, write: true },
     });
     const rename = await rest('PUT', `/classes/contracts_Users/${res.body.result.objectId}`, {
@@ -266,8 +265,12 @@ describe('adduser helpers', () => {
 });
 
 describe('guardExtUserAuthority (unit)', () => {
-  const row = fields => ({ get: key => fields[key] });
-  const req = (original, object) => ({ master: false, original: row(original), object: row(object) });
+  const row = fields => {
+    let acl;
+    const values={UserId:{id:'owner',className:'_User'},...fields};
+    return {get:key=>values[key],getACL:()=>acl,setACL:value=>{acl=value;}};
+  };
+  const req = (original, object) => ({ master: false, user:{id:'owner'},original: row(original), object: row(object) });
 
   it('treats unset and null as the same value', () => {
     expect(() => guardExtUserAuthority(req({}, { OrganizationId: null }))).not.toThrow();
