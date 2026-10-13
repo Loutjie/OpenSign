@@ -143,11 +143,10 @@ async function addAuthorizedUser(request, createAccount) {
 
   extUser.set('CreatedBy', currentUser);
   extUser.set('UserId', { __type: 'Pointer', className: '_User', objectId: user.id });
-  // The admin who added the user, and the user itself (profile, tour status), can write
-  // the row; nobody else. It used to be public read/write. The authority fields are
-  // server-set regardless (accessGuards.js guardExtUserAuthority).
+  // Profile access belongs to the linked user. Team administration uses master cloud
+  // functions; accessGuards.js also enforces this default on every master save.
   const acl = new Parse.ACL();
-  for (const id of [request.user.id, user.id]) {
+  for (const id of [user.id]) {
     acl.setReadAccess(id, true);
     acl.setWriteAccess(id, true);
   }

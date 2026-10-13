@@ -283,7 +283,7 @@ describe('guardExtUserAuthority (unit)', () => {
     expect(() => guardExtUserAuthority(req({}, { UserRole: 'contracts_Admin' }))).toThrow(forbidden);
   });
 
-  it('lets the master key do anything', () => {
-    expect(() => guardExtUserAuthority({ master: true, object: row({ UserRole: 'x' }) })).not.toThrow();
+  it('lets the master key change authority fields', async () => {
+    await expectAsync(guardExtUserAuthority({ master: true, object: row({ UserRole: 'x', UserId: null }) })).toBeResolved();
   });
 });

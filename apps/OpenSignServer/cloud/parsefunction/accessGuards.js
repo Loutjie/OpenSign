@@ -37,6 +37,7 @@ export const MASTER_ONLY_CLASSES = Object.freeze(['defaultdata_Otp', 'MailRateLi
 // many of which have no ACL. Clients only ever write profile fields and TourStatus here.
 export const EXT_USER_AUTHORITY_FIELDS = Object.freeze([
   'UserId',
+  'UserPtr',
   'UserRole',
   'TenantId',
   'OrganizationId',
@@ -53,10 +54,7 @@ const sameValue = (a, b) => JSON.stringify(a ?? null) === JSON.stringify(b ?? nu
 // uses the master key.
 export function guardExtUserAuthority(request) {
   if (request?.master) {
-    const user = request.object.get('UserId');
-    const ownerId = user?.className === '_User' ? idOf(user) : null;
-    request.object.setACL(new Parse.ACL(ownerId ? { [ownerId]: { read: true, write: true } } : {}));
-    return;
+    return setPrivateProfileAcl(request.object);
   }
   if (!request?.original) {
     throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'Permission denied.');
@@ -73,6 +71,19 @@ export function guardExtUserAuthority(request) {
   if (!sameValue(request.object.getACL()?.toJSON(), request.original.getACL()?.toJSON())) {
     throw new Parse.Error(Parse.Error.OPERATION_FORBIDDEN, 'ACL cannot be changed.');
   }
+}
+
+async function setPrivateProfileAcl(object) {
+  const user = object.get('UserId');
+  let ownerId = user?.className === '_User' ? idOf(user) : null;
+  if (ownerId) {
+    try { await new Parse.Query(Parse.User).get(ownerId, { useMasterKey: true }); }
+    catch (error) {
+      if (error?.code !== Parse.Error.OBJECT_NOT_FOUND) throw error;
+      ownerId = null;
+    }
+  }
+  object.setACL(new Parse.ACL(ownerId ? { [ownerId]: { read: true, write: true } } : {}));
 }
 
 const idOf = value => (value && (value.id || value.objectId)) || null;
